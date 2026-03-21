@@ -1,3 +1,20 @@
+/*
+ SQLTerminal - a simple dev tool to connect to {sqlite3, postgres} and run sql commands
+     Copyright (C) 2026 bryan.mark@gmail.com
+ 
+     This program is free software: you can redistribute it and/or modify
+     it under the terms of the GNU General Public License as published by
+     the Free Software Foundation, either version 3 of the License, or
+     (at your option) any later version.
+
+     This program is distributed in the hope that it will be useful,
+     but WITHOUT ANY WARRANTY; without even the implied warranty of
+     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+     GNU General Public License for more details.
+
+     You should have received a copy of the GNU General Public License
+     along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 // TerminalView.swift
 // SQLTerminal
 
@@ -87,6 +104,7 @@ struct TerminalView: View {
             TextEditor(text: $vm.sqlText)
                 .font(.system(.body, design: .monospaced))
                 .scrollContentBackground(.hidden)
+                .autocorrectionDisabled(true)
                 .padding(8)
                 .background(
                     RoundedRectangle(cornerRadius: 6)
@@ -94,6 +112,14 @@ struct TerminalView: View {
                 )
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
+                .onAppear {
+                    // Disable smart quotes and dashes globally for NSTextView
+                    UserDefaults.standard.set(false, forKey: "NSAutomaticQuoteSubstitutionEnabled")
+                    UserDefaults.standard.set(false, forKey: "NSAutomaticDashSubstitutionEnabled")
+                    UserDefaults.standard.set(false, forKey: "NSAutomaticTextReplacementEnabled")
+                    UserDefaults.standard.set(false, forKey: "NSAutomaticSpellingCorrectionEnabled")
+                }
+
         }
     }
 

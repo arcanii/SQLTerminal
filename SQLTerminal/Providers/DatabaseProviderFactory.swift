@@ -15,30 +15,20 @@
      You should have received a copy of the GNU General Public License
      along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-// DatabaseConnection.swift
+// DatabaseProviderFactory.swift
 // SQLTerminal
 
 import Foundation
 
-struct DatabaseConnection {
-    var engine: DatabaseEngine = .sqlite
-    var filePath: String = ""
-    var host: String = "localhost"
-    var port: String = "5432"
-    var databaseName: String = ""
-    var username: String = ""
-    var password: String = ""
+/// Vends the correct provider for a given engine.
+/// When you add a new engine, register it here.
+enum DatabaseProviderFactory {
 
-    /// Security-scoped URL from NSOpenPanel/NSSavePanel (sandbox support)
-    var securityScopedURL: URL?
-
-    var displayName: String {
+    static func provider(for engine: DatabaseEngine) -> DatabaseProvider {
         switch engine {
-        case .sqlite:
-            let name = (filePath as NSString).lastPathComponent
-            return name.isEmpty ? "No database" : "SQLite: \(name)"
-        case .postgres:
-            return "PostgreSQL: \(username)@\(host):\(port)/\(databaseName)"
+        case .sqlite:   return SQLiteProvider()
+        case .postgres: return PostgresProvider()
         }
     }
 }
+

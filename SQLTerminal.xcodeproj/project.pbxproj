@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		93B1B93D2F6E9481003D42E2 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 93B1B93C2F6E9481003D42E2 /* libsqlite3.tbd */; };
+		93B1B9722F6EDB3B003D42E2 /* PostgresClientKit in Frameworks */ = {isa = PBXBuildFile; productRef = 93B1B9712F6EDB3B003D42E2 /* PostgresClientKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,6 +30,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				93B1B93D2F6E9481003D42E2 /* libsqlite3.tbd in Frameworks */,
+				93B1B9722F6EDB3B003D42E2 /* PostgresClientKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -80,6 +82,7 @@
 			);
 			name = SQLTerminal;
 			packageProductDependencies = (
+				93B1B9712F6EDB3B003D42E2 /* PostgresClientKit */,
 			);
 			productName = SQLTerminal;
 			productReference = 93B1B8DD2F6E70B7003D42E2 /* SQLTerminal.app */;
@@ -109,6 +112,9 @@
 			);
 			mainGroup = 93B1B8D42F6E70B7003D42E2;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				93B1B9702F6EDB3B003D42E2 /* XCRemoteSwiftPackageReference "PostgresClientKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 93B1B8DE2F6E70B7003D42E2 /* Products */;
 			projectDirPath = "";
@@ -351,6 +357,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		93B1B9702F6EDB3B003D42E2 /* XCRemoteSwiftPackageReference "PostgresClientKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/codewinsdotcom/PostgresClientKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		93B1B9712F6EDB3B003D42E2 /* PostgresClientKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 93B1B9702F6EDB3B003D42E2 /* XCRemoteSwiftPackageReference "PostgresClientKit" */;
+			productName = PostgresClientKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 93B1B8D52F6E70B7003D42E2 /* Project object */;
 }
