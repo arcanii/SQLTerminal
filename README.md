@@ -1,5 +1,9 @@
 # SQLTerminal
-A simple MacOS sql terminal with nostalgic keys (command-e to execute) 
+A simple MacOS sql terminal with nostalgic keys (command-e (⌘E) to execute queries).
+use command-arrows (⌘↑↓) for history replay.
+
+top window shows results
+enter sql commands in the bottom window
 
 Features
 ----
