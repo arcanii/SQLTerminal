@@ -60,11 +60,8 @@ struct ConnectionSheet: View {
 
             // ── Buttons ──
             HStack {
-                Button("Quit") {
-                    exit(0)
-                    //DispatchQueue.main.async {
-                    //    NSApp.terminate(nil)
-                    //}
+                Button("Close") {
+                    dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
 

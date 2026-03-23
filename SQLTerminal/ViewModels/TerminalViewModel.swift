@@ -76,6 +76,49 @@ final class TerminalViewModel: ObservableObject {
         history.removeAll()
         isShowingConnectionSheet = true
     }
+    
+    func reconnectToDatabase(_ dbName: String) {
+        guard var config = connectionInfo else {
+            appendHistory(.error("No active connection to switch from."))
+            return
+        }
+
+        // Disconnect current
+        provider?.disconnect()
+        provider = nil
+        isConnected = false
+
+        appendHistory(.system("Switching to database: \(dbName)..."))
+
+        // Update the database name
+        config.databaseName = dbName
+
+        // Reconnect
+        let newProvider = DatabaseProviderFactory.provider(for: config.engine)
+        do {
+            try newProvider.connect(with: config)
+            self.provider = newProvider
+            self.connectionInfo = config
+            self.isConnected = true
+            appendHistory(.system("Connected to \(config.displayName)"))
+        } catch {
+            appendHistory(.error("Failed to connect to \(dbName): \(error.localizedDescription)"))
+            // Try to reconnect to the old database
+            if let oldConfig = connectionInfo {
+                appendHistory(.system("Attempting to reconnect to previous database..."))
+                let fallback = DatabaseProviderFactory.provider(for: oldConfig.engine)
+                do {
+                    try fallback.connect(with: oldConfig)
+                    self.provider = fallback
+                    self.isConnected = true
+                    appendHistory(.system("Reconnected to \(oldConfig.displayName)"))
+                } catch {
+                    appendHistory(.error("Could not reconnect: \(error.localizedDescription)"))
+                }
+            }
+        }
+    }
+
 
 
     // MARK: - Command history navigation
@@ -158,6 +201,10 @@ final class TerminalViewModel: ObservableObject {
                         appendHistory(.result(result))
                     }
                 }
+     
+            case .reconnect(let dbName):
+                reconnectToDatabase(dbName)
+
 
             case .message(let text):
                 appendHistory(.system(text))

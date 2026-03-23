@@ -41,4 +41,5 @@ struct DatabaseConnection {
             return "PostgreSQL: \(username)@\(host):\(port)/\(databaseName)"
         }
     }
+
 }

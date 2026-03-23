@@ -37,26 +37,56 @@ struct SQLTerminalApp: App {
         }
         .windowStyle(.titleBar)
         .defaultSize(width: 1100, height: 750)
+
+        // About window
+        Window("About SQLTerminal", id: "about") {
+            AboutView()
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+
+        // Wire the About menu item
+        .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About SQLTerminal") {
+                    NSApp.activate(ignoringOtherApps: true)
+                    if let window = NSApp.windows.first(where: { $0.title == "About SQLTerminal" }) {
+                        window.makeKeyAndOrderFront(nil)
+                    } else {
+                        // Open using the environment action
+                        openAboutWindow()
+                    }
+                }
+            }
+        }
+    }
+
+    private func openAboutWindow() {
+        let aboutView = NSHostingController(rootView: AboutView())
+        let window = NSWindow(contentViewController: aboutView)
+        window.title = "About SQLTerminal"
+        window.styleMask = [.titled, .closable]
+        window.isReleasedWhenClosed = false
+        window.center()
+        window.makeKeyAndOrderFront(nil)
     }
 
     private func installKeyMonitor() {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
-            // ⌘E — Execute
             if flags.contains(.command),
                !flags.contains(.shift),
                !flags.contains(.option),
                !flags.contains(.control),
                event.keyCode == 14 {
-                // Find the active window's TerminalViewModel
                 if let vm = activeTerminalVM() {
                     vm.executeCurrentQuery()
                     return nil
                 }
             }
 
-            // ⌘↑ — Previous command
             if flags.contains(.command),
                event.keyCode == 126 {
                 if let vm = activeTerminalVM() {
@@ -65,7 +95,6 @@ struct SQLTerminalApp: App {
                 }
             }
 
-            // ⌘↓ — Next command
             if flags.contains(.command),
                event.keyCode == 125 {
                 if let vm = activeTerminalVM() {
@@ -78,21 +107,12 @@ struct SQLTerminalApp: App {
         }
     }
 
-    /// Finds the TerminalViewModel for the currently active window
     private func activeTerminalVM() -> TerminalViewModel? {
         guard let window = NSApp.keyWindow else { return nil }
-        guard let contentView = window.contentView else { return nil }
-
-        // Walk the hosting view to find our SessionView's view model
-        // The NSEvent is already scoped to the key window, so we use
-        // a shared registry instead
         return SessionRegistry.shared.viewModel(for: window)
     }
 }
 
-// MARK: - Session Registry
-
-/// Tracks which TerminalViewModel belongs to which window
 final class SessionRegistry {
     static let shared = SessionRegistry()
     private var sessions: [ObjectIdentifier: TerminalViewModel] = [:]

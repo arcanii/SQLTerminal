@@ -192,6 +192,15 @@ struct DotCommandHandler {
             case .postgres:
                 return .sql("SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname;")
             }
+            
+        // ── Connection ──
+
+        case ".connect", ".use":
+            if let dbName = argument {
+                return .reconnect(dbName)
+            }
+            return .message("Usage: .connect <database_name>")
+
 
         // ── SQLite specific ──
 
@@ -284,12 +293,18 @@ struct DotCommandHandler {
     Foreign Keys
       .fk <table>             Show foreign keys for a table
 
+    Connection
+      .connect <database>     Switch to a different database
+      .use <database>         Same as .connect
+
     Terminal
       .clear                  Clear the terminal output
 
     Other
       .help                   Show this help
     """
+
+    
 }
 
 // MARK: - Result type
@@ -299,5 +314,6 @@ enum DotCommandResult {
     case multiSQL([String])
     case message(String)
     case clear
+    case reconnect(String)
 }
 

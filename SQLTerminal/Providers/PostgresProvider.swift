@@ -98,17 +98,78 @@ final class PostgresProvider: DatabaseProvider {
             return .failure("Empty query.")
         }
 
+        // Split into individual statements, respecting $$ blocks
+        let statements = splitStatements(trimmed)
+
         let start = CFAbsoluteTimeGetCurrent()
 
+        var lastColumns: [String] = []
+        var lastRows: [[String]] = []
+        var totalRowsAffected = 0
+        var lastWasQuery = false
+
+        for sql in statements {
+            let stmt = sql.trimmingCharacters(in: .whitespacesAndNewlines)
+            if stmt.isEmpty { continue }
+
+            // Skip psql meta-commands
+            if stmt.hasPrefix("\\") {
+                continue
+            }
+
+            // Skip lines that are only comments
+            let uncommented = stmt.components(separatedBy: "\n")
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("--") }
+                .joined(separator: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if uncommented.isEmpty { continue }
+
+            let result = executeSingle(connection: connection, sql: stmt)
+
+            if let error = result.error {
+                let elapsed = CFAbsoluteTimeGetCurrent() - start
+                return QueryResult(
+                    columns: result.columns,
+                    rows: result.rows,
+                    rowsAffected: totalRowsAffected,
+                    executionTime: elapsed,
+                    error: error,
+                    statementType: .error
+                )
+            }
+
+            if !result.columns.isEmpty {
+                lastColumns = result.columns
+                lastRows = result.rows
+                lastWasQuery = true
+            } else {
+                lastWasQuery = false
+            }
+            totalRowsAffected += result.rowsAffected
+        }
+
+        let elapsed = CFAbsoluteTimeGetCurrent() - start
+
+        return QueryResult(
+            columns: lastColumns,
+            rows: lastRows,
+            rowsAffected: totalRowsAffected,
+            executionTime: elapsed,
+            error: nil,
+            statementType: lastWasQuery ? .query : .mutation
+        )
+    }
+
+    // MARK: - Execute single statement
+
+    private func executeSingle(connection: Connection, sql: String) -> QueryResult {
         do {
-            let statement = try connection.prepareStatement(text: trimmed)
+            let statement = try connection.prepareStatement(text: sql)
             defer { statement.close() }
 
-            // retrieveColumnMetadata MUST be true to get column names
             let cursor = try statement.execute(retrieveColumnMetadata: true)
             defer { cursor.close() }
 
-            // Get column names
             let columnNames: [String]
             if let columns = cursor.columns {
                 columnNames = columns.map { $0.name }
@@ -116,7 +177,6 @@ final class PostgresProvider: DatabaseProvider {
                 columnNames = []
             }
 
-            // Fetch rows
             var rows: [[String]] = []
             for row in cursor {
                 let columns = try row.get().columns
@@ -136,51 +196,161 @@ final class PostgresProvider: DatabaseProvider {
                 rows.append(rowValues)
             }
 
-            let elapsed = CFAbsoluteTimeGetCurrent() - start
-
-            // Determine statement type
-            let isQuery = !columnNames.isEmpty
-            let upperSQL = trimmed.uppercased().trimmingCharacters(in: .whitespaces)
-            let isMutation = upperSQL.hasPrefix("INSERT") ||
-                             upperSQL.hasPrefix("UPDATE") ||
-                             upperSQL.hasPrefix("DELETE") ||
-                             upperSQL.hasPrefix("CREATE") ||
-                             upperSQL.hasPrefix("DROP") ||
-                             upperSQL.hasPrefix("ALTER") ||
-                             upperSQL.hasPrefix("TRUNCATE")
-
-            if isQuery {
-                return QueryResult(
-                    columns: columnNames,
-                    rows: rows,
-                    rowsAffected: rows.count,
-                    executionTime: elapsed,
-                    error: nil,
-                    statementType: .query
-                )
-            } else {
-                return QueryResult(
-                    columns: [],
-                    rows: [],
-                    rowsAffected: 0,
-                    executionTime: elapsed,
-                    error: nil,
-                    statementType: .mutation
-                )
-            }
+            return QueryResult(
+                columns: columnNames,
+                rows: rows,
+                rowsAffected: rows.count,
+                executionTime: 0,
+                error: nil,
+                statementType: columnNames.isEmpty ? .mutation : .query
+            )
 
         } catch {
-            let elapsed = CFAbsoluteTimeGetCurrent() - start
             return QueryResult(
                 columns: [],
                 rows: [],
                 rowsAffected: 0,
-                executionTime: elapsed,
+                executionTime: 0,
                 error: error.localizedDescription,
                 statementType: .error
             )
         }
     }
+
+    // MARK: - Statement splitter (respects $$ dollar-quoted blocks)
+
+    private func splitStatements(_ sql: String) -> [String] {
+        var statements: [String] = []
+        var current = ""
+        var inDollarQuote = false
+        var dollarTag = ""
+        var inSingleQuote = false
+        var inLineComment = false
+        var inBlockComment = false
+        let chars = Array(sql)
+        var i = 0
+
+        while i < chars.count {
+            let c = chars[i]
+            let next: Character? = (i + 1 < chars.count) ? chars[i + 1] : nil
+
+            // Line comment
+            if !inSingleQuote && !inDollarQuote && !inBlockComment
+                && c == "-" && next == "-" {
+                inLineComment = true
+                current.append(c)
+                i += 1
+                continue
+            }
+            if inLineComment {
+                current.append(c)
+                if c == "\n" { inLineComment = false }
+                i += 1
+                continue
+            }
+
+            // Block comment
+            if !inSingleQuote && !inDollarQuote && !inBlockComment
+                && c == "/" && next == "*" {
+                inBlockComment = true
+                current.append(c)
+                i += 1
+                continue
+            }
+            if inBlockComment {
+                current.append(c)
+                if c == "*" && next == "/" {
+                    current.append(next!)
+                    inBlockComment = false
+                    i += 2
+                    continue
+                }
+                i += 1
+                continue
+            }
+
+            // Dollar quoting: $tag$ ... $tag$
+            if !inSingleQuote && c == "$" {
+                // Find the tag
+                var tag = "$"
+                var j = i + 1
+                while j < chars.count && (chars[j].isLetter || chars[j].isNumber || chars[j] == "_") {
+                    tag.append(chars[j])
+                    j += 1
+                }
+                if j < chars.count && chars[j] == "$" {
+                    tag.append("$")
+                    if inDollarQuote && tag == dollarTag {
+                        // End of dollar quote
+                        current.append(tag)
+                        inDollarQuote = false
+                        dollarTag = ""
+                        i = j + 1
+                        continue
+                    } else if !inDollarQuote {
+                        // Start of dollar quote
+                        inDollarQuote = true
+                        dollarTag = tag
+                        current.append(tag)
+                        i = j + 1
+                        continue
+                    }
+                }
+            }
+
+            if inDollarQuote {
+                current.append(c)
+                i += 1
+                continue
+            }
+
+            // Single quotes
+            if c == "'" && !inDollarQuote {
+                inSingleQuote = !inSingleQuote
+                // Handle escaped single quotes ''
+                if inSingleQuote == false && next == "'" {
+                    current.append(c)
+                    current.append(next!)
+                    inSingleQuote = true
+                    i += 2
+                    continue
+                }
+                current.append(c)
+                i += 1
+                continue
+            }
+
+            if inSingleQuote {
+                current.append(c)
+                i += 1
+                continue
+            }
+
+            // Semicolon — statement boundary
+            if c == ";" {
+                current.append(c)
+                let trimmed = current.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    statements.append(trimmed)
+                }
+                current = ""
+                i += 1
+                continue
+            }
+
+            current.append(c)
+            i += 1
+        }
+
+        // Remaining
+        let trimmed = current.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            statements.append(trimmed)
+        }
+
+        return statements
+    }
+
 
 }
 
