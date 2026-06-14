@@ -8,6 +8,27 @@
         <description>Updates for SQLTerminal — a native macOS SQL terminal.</description>
         <language>en</language>
 
+        <item>
+            <title>v0.1.2</title>
+            <pubDate>Sun, 14 Jun 2026 00:00:00 +0000</pubDate>
+            <sparkle:version>2</sparkle:version>
+            <sparkle:shortVersionString>0.1.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.2</sparkle:minimumSystemVersion>
+            <link>https://github.com/arcanii/SQLTerminal/releases/tag/v0.1.2</link>
+            <description><![CDATA[
+                <h2>SQLTerminal 0.1.2</h2>
+                <ul>
+                    <li>Automatic updates via Sparkle, with a <b>Check for Updates…</b> menu item.</li>
+                    <li>PostgreSQL: connection errors now show the server's real reason (and suggest the <code>pg_hba.conf</code> line for "no entry" rejections); the connection sheet shows every field at once and remembers your engine; <code>.use</code>/<code>.connect</code> switch databases with clear "no access" messages.</li>
+                    <li>Selectable text in the output pane.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+                url="https://github.com/arcanii/SQLTerminal/releases/download/v0.1.2/SQLTerminal-v0.1.2.dmg"
+                sparkle:edSignature="j1c4pt8YAimnaHBgMvbz/4QrZR/h1KXWdnmbmQsA/yXxVNAk/HMsjZf3MAadFw8gzRcLwhI9jA3Qfp7aLY+vBw==" length="4036709"
+                type="application/octet-stream"/>
+        </item>
+
         <!--
           Sparkle reads this feed from the SUFeedURL set in the app's Info.plist:
           https://raw.githubusercontent.com/arcanii/SQLTerminal/main/appcast.xml
