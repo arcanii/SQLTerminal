@@ -18,12 +18,15 @@
 // ConnectionProfile.swift
 // SQLTerminal
 //
-// A non-secret snapshot of a connection, used for the Recents list. The password
-// is never stored here — it lives in the Keychain (see KeychainHelper).
+// A non-secret snapshot of a connection. Used for both the auto Recents list
+// (no name) and explicitly Saved profiles (named). The password is never stored
+// here — it lives in the Keychain (see KeychainHelper).
 
 import Foundation
 
 struct ConnectionProfile: Codable, Identifiable {
+    /// Set for saved profiles ("Prod", "Local dev"); nil for recents.
+    var name: String?
     var engine: DatabaseEngine
     var filePath: String
     var host: String
@@ -31,7 +34,8 @@ struct ConnectionProfile: Codable, Identifiable {
     var databaseName: String
     var username: String
 
-    init(_ connection: DatabaseConnection) {
+    init(_ connection: DatabaseConnection, name: String? = nil) {
+        self.name    = name
         engine       = connection.engine
         filePath     = connection.filePath
         host         = connection.host
@@ -40,8 +44,9 @@ struct ConnectionProfile: Codable, Identifiable {
         username     = connection.username
     }
 
-    /// Stable identity for dedup and as a `List`/`ForEach` id.
+    /// Stable identity: by name for saved profiles, by connection for recents.
     var id: String {
+        if let name, !name.isEmpty { return "named:\(name)" }
         switch engine {
         case .sqlite:   return "sqlite:\(filePath)"
         case .postgres: return "postgres:\(username)@\(host):\(port)/\(databaseName)"
@@ -49,10 +54,11 @@ struct ConnectionProfile: Codable, Identifiable {
     }
 
     var displayName: String {
+        if let name, !name.isEmpty { return name }
         switch engine {
         case .sqlite:
-            let name = (filePath as NSString).lastPathComponent
-            return "SQLite — \(name.isEmpty ? filePath : name)"
+            let n = (filePath as NSString).lastPathComponent
+            return "SQLite — \(n.isEmpty ? filePath : n)"
         case .postgres:
             return "\(username)@\(host):\(port)/\(databaseName)"
         }
@@ -67,38 +73,60 @@ struct ConnectionProfile: Codable, Identifiable {
     }
 }
 
-/// Persists the most-recently-used connection profiles in UserDefaults.
+/// Persists the most-recently-used connections (auto, capped, deduped).
 enum RecentConnectionsStore {
     private static let key = "recentConnections"
     private static let maxCount = 10
 
     static func load() -> [ConnectionProfile] {
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let list = try? JSONDecoder().decode([ConnectionProfile].self, from: data)
-        else { return [] }
-        return list
+        decode(key)
     }
 
-    /// Insert/refresh a profile at the top (dedup by identity, capped).
     static func add(_ profile: ConnectionProfile) {
         guard profile.isValid else { return }
         var list = load().filter { $0.id != profile.id }
         list.insert(profile, at: 0)
         if list.count > maxCount { list = Array(list.prefix(maxCount)) }
-        save(list)
-    }
-
-    static func remove(_ profile: ConnectionProfile) {
-        save(load().filter { $0.id != profile.id })
+        encode(list, key)
     }
 
     static func clear() {
         UserDefaults.standard.removeObject(forKey: key)
     }
+}
 
-    private static func save(_ list: [ConnectionProfile]) {
-        if let data = try? JSONEncoder().encode(list) {
-            UserDefaults.standard.set(data, forKey: key)
-        }
+/// Persists explicitly saved, named profiles (no eviction; sorted by name).
+enum SavedProfilesStore {
+    private static let key = "savedProfiles"
+
+    static func load() -> [ConnectionProfile] {
+        decode(key)
+    }
+
+    static func save(_ profile: ConnectionProfile) {
+        guard profile.isValid else { return }
+        var list = load().filter { $0.id != profile.id }
+        list.append(profile)
+        list.sort { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+        encode(list, key)
+    }
+
+    static func remove(_ profile: ConnectionProfile) {
+        encode(load().filter { $0.id != profile.id }, key)
+    }
+}
+
+// MARK: - Shared JSON helpers
+
+private func decode(_ key: String) -> [ConnectionProfile] {
+    guard let data = UserDefaults.standard.data(forKey: key),
+          let list = try? JSONDecoder().decode([ConnectionProfile].self, from: data)
+    else { return [] }
+    return list
+}
+
+private func encode(_ list: [ConnectionProfile], _ key: String) {
+    if let data = try? JSONEncoder().encode(list) {
+        UserDefaults.standard.set(data, forKey: key)
     }
 }

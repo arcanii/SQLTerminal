@@ -28,6 +28,8 @@ struct ConnectionSheet: View {
     @StateObject private var vm = ConnectionViewModel()
     @Environment(\.dismiss) private var dismiss
     @State private var showPassword = false
+    @State private var showingSaveProfile = false
+    @State private var newProfileName = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -39,9 +41,7 @@ struct ConnectionSheet: View {
 
             // ── Form ──
             Form {
-                if !vm.recents.isEmpty {
-                    recentsSection
-                }
+                connectionsSection
                 enginePicker
                 if vm.connection.engine == .sqlite {
                     sqliteFields
@@ -80,12 +80,19 @@ struct ConnectionSheet: View {
             .padding()
         }
         .frame(width: 520, height: sheetHeight)
+        .alert("Save Connection Profile", isPresented: $showingSaveProfile) {
+            TextField("Profile name", text: $newProfileName)
+            Button("Save") { vm.saveCurrentAsProfile(named: newProfileName) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Give this connection a name (e.g. \"Prod\", \"Local dev\").")
+        }
     }
 
     /// Size the sheet to its content so every field is visible without scrolling.
     private var sheetHeight: CGFloat {
         let base: CGFloat = vm.connection.engine == .sqlite ? 380 : 610
-        return base + (vm.recents.isEmpty ? 0 : 56)
+        return base + 56  // the Connections menu row
     }
 
     // MARK: - Sub-views
@@ -105,16 +112,44 @@ struct ConnectionSheet: View {
         .padding(.bottom, 12)
     }
 
-    private var recentsSection: some View {
+    private var connectionsSection: some View {
         Section {
             Menu {
-                ForEach(vm.recents) { profile in
-                    Button(profile.displayName) { vm.apply(profile) }
+                Button {
+                    newProfileName = ""
+                    showingSaveProfile = true
+                } label: {
+                    Label("Save Current as Profile…", systemImage: "plus")
                 }
-                Divider()
-                Button("Clear Recents", role: .destructive) { vm.clearRecents() }
+                .disabled(!vm.canConnect)
+
+                if !vm.savedProfiles.isEmpty {
+                    Divider()
+                    Section("Saved Profiles") {
+                        ForEach(vm.savedProfiles) { profile in
+                            Button(profile.displayName) { vm.apply(profile) }
+                        }
+                    }
+                    Menu {
+                        ForEach(vm.savedProfiles) { profile in
+                            Button(profile.displayName, role: .destructive) { vm.deleteProfile(profile) }
+                        }
+                    } label: {
+                        Label("Delete Profile", systemImage: "trash")
+                    }
+                }
+
+                if !vm.recents.isEmpty {
+                    Divider()
+                    Section("Recent") {
+                        ForEach(vm.recents) { profile in
+                            Button(profile.displayName) { vm.apply(profile) }
+                        }
+                    }
+                    Button("Clear Recents", role: .destructive) { vm.clearRecents() }
+                }
             } label: {
-                Label("Recent Connection", systemImage: "clock.arrow.circlepath")
+                Label("Saved & Recent Connections", systemImage: "bookmark")
             }
         }
     }

@@ -30,8 +30,10 @@ final class ConnectionViewModel: ObservableObject {
     @Published var securityScopedURL: URL?
     /// Whether to persist this connection's password in the Keychain.
     @Published var savePassword = false
-    /// Most-recently-used connections (no passwords).
+    /// Most-recently-used connections (auto, no passwords).
     @Published var recents: [ConnectionProfile] = []
+    /// Explicitly saved, named connections.
+    @Published var savedProfiles: [ConnectionProfile] = []
 
     // MARK: - UserDefaults keys
 
@@ -49,6 +51,7 @@ final class ConnectionViewModel: ObservableObject {
     init() {
         loadLastConnection()
         recents = RecentConnectionsStore.load()
+        savedProfiles = SavedProfilesStore.load()
     }
 
     // MARK: - Computed
@@ -65,9 +68,9 @@ final class ConnectionViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Recents
+    // MARK: - Profiles & recents
 
-    /// Fill the form from a saved profile, restoring its password from the
+    /// Fill the form from a saved/recent profile, restoring its password from the
     /// Keychain when one was stored.
     func apply(_ profile: ConnectionProfile) {
         connection.engine       = profile.engine
@@ -86,6 +89,21 @@ final class ConnectionViewModel: ObservableObject {
             connection.password = stored
             savePassword = true
         }
+    }
+
+    /// Save the current form as a named profile (and persist its password to the
+    /// Keychain if opted in).
+    func saveCurrentAsProfile(named name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        SavedProfilesStore.save(ConnectionProfile(connection, name: trimmed))
+        savedProfiles = SavedProfilesStore.load()
+        updateStoredPassword()
+    }
+
+    func deleteProfile(_ profile: ConnectionProfile) {
+        SavedProfilesStore.remove(profile)
+        savedProfiles = SavedProfilesStore.load()
     }
 
     func clearRecents() {
