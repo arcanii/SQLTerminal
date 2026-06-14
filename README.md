@@ -19,7 +19,7 @@ Use command-arrows (⌘↑↓) for history replay.
 
 |Version|Date|Description|
 |-------|----|-----------|
-|1.1.4 | June 14, 2026 | SQL syntax highlighting; persistent searchable query history + snippets; sortable result columns + cell detail (JSON); transparent About logo |
+|1.1.4 | June 14, 2026 | SQL syntax highlighting; persistent searchable query history + snippets; sortable result columns + cell detail (JSON); in-app Help (⌘?); transparent About logo |
 |1.1.3 | June 14, 2026 | Off-main query execution + cancel; SSL/TLS modes with status-bar lock & connection details; read-only mode; destructive-statement confirmation; run-selection / statement-at-cursor; transaction controls; schema sidebar; `SQLCore` test suite |
 |0.1.2 | June 14, 2026 | Auto-updates (Sparkle); detailed PostgreSQL connection errors & connection UX; selectable output |
 |0.1.1 | March 23, 2026|Initial version - SQLite, Postgres|
@@ -114,6 +114,7 @@ Use command-arrows (⌘↑↓) for history replay.
 | **⌘↓** | Next command from history |
 | **⌘N** | New window / session |
 | **⌘W** | Close window |
+| **⌘?** | SQLTerminal Help |
 
 ## Installation
 

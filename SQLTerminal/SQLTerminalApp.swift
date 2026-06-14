@@ -73,6 +73,14 @@ struct SQLTerminalApp: App {
             CommandGroup(after: .appInfo) {
                 CheckForUpdatesView(updater: updaterController.updater)
             }
+
+            // Replace the (empty) default Help menu with our in-app help.
+            CommandGroup(replacing: .help) {
+                Button("SQLTerminal Help") {
+                    openHelpWindow()
+                }
+                .keyboardShortcut("?", modifiers: .command)
+            }
         }
     }
 
@@ -82,6 +90,22 @@ struct SQLTerminalApp: App {
         window.title = "About SQLTerminal"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    private func openHelpWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        if let window = NSApp.windows.first(where: { $0.title == "SQLTerminal Help" }) {
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+        let helpView = NSHostingController(rootView: HelpView())
+        let window = NSWindow(contentViewController: helpView)
+        window.title = "SQLTerminal Help"
+        window.styleMask = [.titled, .closable, .resizable]
+        window.isReleasedWhenClosed = false
+        window.setContentSize(NSSize(width: 480, height: 580))
         window.center()
         window.makeKeyAndOrderFront(nil)
     }
