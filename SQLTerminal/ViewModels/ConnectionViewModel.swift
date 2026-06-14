@@ -1,7 +1,7 @@
 /*
  SQLTerminal - a simple dev tool to connect to {sqlite3, postgres} and run sql commands
      Copyright (C) 2026 bryan.mark@gmail.com
- 
+
      This program is free software: you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
      the Free Software Foundation, either version 3 of the License, or
@@ -28,6 +28,8 @@ final class ConnectionViewModel: ObservableObject {
     @Published var connection = DatabaseConnection()
     @Published var errorMessage: String?
     @Published var securityScopedURL: URL?
+    /// Whether to persist this connection's password in the Keychain.
+    @Published var savePassword = false
 
     // MARK: - UserDefaults keys
 
@@ -97,8 +99,9 @@ final class ConnectionViewModel: ObservableObject {
         defaults.set(connection.host,            forKey: Keys.host)
         defaults.set(connection.port,            forKey: Keys.port)
         defaults.set(connection.databaseName,    forKey: Keys.databaseName)
-        defaults.set(connection.username,         forKey: Keys.username)
-        // Never save password — user re-enters it each time
+        defaults.set(connection.username,        forKey: Keys.username)
+        // The password is kept in the Keychain (when opted in), never UserDefaults.
+        updateStoredPassword()
     }
 
     /// Persist just the engine choice immediately. `saveLastConnection()` only
@@ -107,6 +110,18 @@ final class ConnectionViewModel: ObservableObject {
     /// engine change makes the sheet reopen to whatever engine you last picked.
     func rememberEngine() {
         UserDefaults.standard.set(connection.engine.rawValue, forKey: Keys.engine)
+    }
+
+    /// Save or remove this connection's password in the Keychain based on the
+    /// `savePassword` toggle. PostgreSQL only — SQLite has no password.
+    private func updateStoredPassword() {
+        guard connection.engine == .postgres, !connection.username.isEmpty else { return }
+        let key = KeychainHelper.account(for: connection)
+        if savePassword, !connection.password.isEmpty {
+            KeychainHelper.savePassword(connection.password, account: key)
+        } else {
+            KeychainHelper.deletePassword(account: key)
+        }
     }
 
     private func loadLastConnection() {
@@ -135,6 +150,15 @@ final class ConnectionViewModel: ObservableObject {
 
         if let username = defaults.string(forKey: Keys.username), !username.isEmpty {
             connection.username = username
+        }
+
+        // Restore a saved password from the Keychain (PostgreSQL only). The login
+        // keychain is already unlocked, so this needs no extra prompt.
+        if connection.engine == .postgres,
+           !connection.username.isEmpty, !connection.host.isEmpty,
+           let stored = KeychainHelper.password(account: KeychainHelper.account(for: connection)) {
+            connection.password = stored
+            savePassword = true
         }
     }
 }

@@ -1,7 +1,7 @@
 /*
  SQLTerminal - a simple dev tool to connect to {sqlite3, postgres} and run sql commands
      Copyright (C) 2026 bryan.mark@gmail.com
- 
+
      This program is free software: you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
      the Free Software Foundation, either version 3 of the License, or
@@ -27,6 +27,7 @@ struct ConnectionSheet: View {
     @EnvironmentObject var terminalVM: TerminalViewModel
     @StateObject private var vm = ConnectionViewModel()
     @Environment(\.dismiss) private var dismiss
+    @State private var showPassword = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -75,10 +76,10 @@ struct ConnectionSheet: View {
             }
             .padding()
         }
-        // SQLite needs one field; PostgreSQL needs six. Size the sheet to the
-        // engine so every field — including Username/Password — is visible at
-        // once instead of hidden below the fold in a scrolling form.
-        .frame(width: 520, height: vm.connection.engine == .sqlite ? 380 : 560)
+        // SQLite needs one field; PostgreSQL needs the full server form. Size the
+        // sheet to the engine so every field is visible at once instead of hidden
+        // below the fold in a scrolling form.
+        .frame(width: 520, height: vm.connection.engine == .sqlite ? 380 : 610)
     }
 
     // MARK: - Sub-views
@@ -142,8 +143,30 @@ struct ConnectionSheet: View {
                 .textFieldStyle(.roundedBorder)
             TextField("Username", text: $vm.connection.username)
                 .textFieldStyle(.roundedBorder)
-            SecureField("Password", text: $vm.connection.password)
+
+            // Password field with a show/hide (eye) toggle.
+            HStack(spacing: 6) {
+                Group {
+                    if showPassword {
+                        TextField("Password", text: $vm.connection.password)
+                    } else {
+                        SecureField("Password", text: $vm.connection.password)
+                    }
+                }
                 .textFieldStyle(.roundedBorder)
+
+                Button {
+                    showPassword.toggle()
+                } label: {
+                    Image(systemName: showPassword ? "eye.slash" : "eye")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help(showPassword ? "Hide password" : "Show password")
+            }
+
+            Toggle("Save password in Keychain", isOn: $vm.savePassword)
+                .font(.caption)
         }
     }
 
@@ -162,4 +185,3 @@ struct ConnectionSheet: View {
     }
 
 }
-
