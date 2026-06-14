@@ -2,13 +2,15 @@
 A native macOS SQL terminal built with SwiftUI. Connect to SQLite or PostgreSQL databases and run queries with a clean, minimal interface.
 
 <p align="center">
-  <img src="docs/icon.png" width="160" alt="SQLTerminal app icon">
+  <img src="art/transparent_logo.png" width="160" alt="SQLTerminal">
 </p>
 
-![macOS](https://img.shields.io/badge/macOS-26.2+-blue)
-![Swift](https://img.shields.io/badge/Swift-6-orange)
-![License](https://img.shields.io/badge/License-GPL--3.0-blue)
-![Release](https://img.shields.io/github/v/release/arcanii/SQLTerminal)
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-26.2+-blue" alt="macOS">
+  <img src="https://img.shields.io/badge/Swift-6-orange" alt="Swift">
+  <img src="https://img.shields.io/badge/License-GPL--3.0-blue" alt="License">
+  <img src="https://img.shields.io/github/v/release/arcanii/SQLTerminal" alt="Release">
+</p>
 
 
 ## Overview
