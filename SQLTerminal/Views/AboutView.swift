@@ -31,12 +31,11 @@ struct AboutView: View {
     var body: some View {
         VStack(spacing: 16) {
 
-            // App icon
-            if let icon = NSApp.applicationIconImage {
-                Image(nsImage: icon)
-                    .resizable()
-                    .frame(width: 96, height: 96)
-            }
+            // App logo (transparent)
+            Image("AboutLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 96, height: 96)
 
             // App name
             Text("SQLTerminal")
