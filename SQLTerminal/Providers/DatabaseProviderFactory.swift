@@ -24,7 +24,8 @@ import Foundation
 /// When you add a new engine, register it here.
 enum DatabaseProviderFactory {
 
-    static func provider(for engine: DatabaseEngine) -> DatabaseProvider {
+    /// `nonisolated` so `DatabaseSession` can build providers on its background queue.
+    nonisolated static func provider(for engine: DatabaseEngine) -> DatabaseProvider {
         switch engine {
         case .sqlite:   return SQLiteProvider()
         case .postgres: return PostgresProvider()

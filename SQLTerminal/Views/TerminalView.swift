@@ -73,19 +73,36 @@ struct TerminalView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                Button {
-                    vm.executeCurrentQuery()
-                } label: {
-                    Label("Execute (⌘E)", systemImage: "play.fill")
+                if vm.isRunning {
+                    ProgressView()
+                        .controlSize(.small)
+                    Button {
+                        vm.cancelRunningQuery()
+                    } label: {
+                        Label("Cancel", systemImage: "stop.fill")
+                    }
+                    .help("Cancel running query (⌘.)")
+                    .keyboardShortcut(".", modifiers: .command)
+                } else {
+                    if vm.isConnecting {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    Button {
+                        vm.executeCurrentQuery()
+                    } label: {
+                        Label("Execute (⌘E)", systemImage: "play.fill")
+                    }
+                    .help("Execute query (⌘E)")
+                    .disabled(!vm.isConnected || vm.isConnecting)
                 }
-                .help("Execute query (⌘E)")
-                .disabled(!vm.isConnected)
 
                 Button {
                     vm.isShowingConnectionSheet = true
                 } label: {
                     Label("Reconnect", systemImage: "arrow.triangle.2.circlepath")
                 }
+                .disabled(vm.isRunning || vm.isConnecting)
             }
         }
     }

@@ -21,7 +21,7 @@
 import Foundation
 import PostgresClientKit
 
-final class PostgresProvider: DatabaseProvider {
+nonisolated final class PostgresProvider: DatabaseProvider {
 
     let engine: DatabaseEngine = .postgres
     private(set) var isConnected = false
@@ -114,6 +114,20 @@ final class PostgresProvider: DatabaseProvider {
         connection = nil
         isConnected = false
         statusMessage = "Disconnected"
+    }
+
+    // MARK: - Cancel
+
+    /// Interrupt a query in flight by force-closing the socket from this (other)
+    /// thread. PostgresClientKit documents `closeAbruptly()` as safe to call even
+    /// while another thread is operating against the connection; it unblocks the
+    /// in-flight read, which then throws. PostgresClientKit has no `CancelRequest`
+    /// support, so the connection is dead afterwards — the caller must reconnect.
+    ///
+    /// `DatabaseSession` serialises this against `connect`/`disconnect`, so reading
+    /// `connection` here never races those mutating it.
+    func cancel() {
+        connection?.closeAbruptly()
     }
 
     // MARK: - Execute

@@ -33,85 +33,106 @@ final class TerminalViewModel: ObservableObject {
     @Published var connectionInfo: DatabaseConnection?
     @Published var isConnected = false
 
+    /// A query is executing on the background session. Drives the spinner and the
+    /// Cancel affordance, and gates a second concurrent execution.
+    @Published var isRunning = false
+    /// A connect / reconnect is in progress (also blocking I/O, but not cancellable
+    /// in a way that can interrupt a stuck socket, so no Cancel is offered).
+    @Published var isConnecting = false
+
     // MARK: - Command history
 
     private var commandHistory: [String] = []
     private var historyIndex: Int = -1
     private var savedCurrentInput: String = ""
 
-    // MARK: - Provider
+    // MARK: - Session
 
-    private var provider: DatabaseProvider?
+    /// Runs all blocking database work off the main thread. One per view model,
+    /// so each window's session is fully independent.
+    private let session = DatabaseSession(label: "com.sqlterminal.session.\(UUID().uuidString)")
+
+    /// The in-flight execute / reconnect task, if any. Cancelling it interrupts a
+    /// running query (see `DatabaseSession`).
+    private var runningTask: Task<Void, Never>?
 
     // MARK: - Connection
 
-    func connect(with config: DatabaseConnection) {
-        let newProvider = DatabaseProviderFactory.provider(for: config.engine)
+    /// Connect off the main thread. Returns whether the connection succeeded; the
+    /// detailed failure reason is appended to history (as before).
+    @discardableResult
+    func connect(with config: DatabaseConnection) async -> Bool {
+        isConnecting = true
+        defer { isConnecting = false }
         do {
-            try newProvider.connect(with: config)
-            self.provider = newProvider
-            self.connectionInfo = config
-            self.isConnected = true
-            appendHistory(
-                .system("Connected to \(config.displayName)")
-            )
+            try await session.connect(config)
+            connectionInfo = config
+            isConnected = true
+            appendHistory(.system("Connected to \(config.displayName)"))
+            return true
         } catch {
+            connectionInfo = nil
+            isConnected = false
             appendHistory(.error(error.localizedDescription))
+            return false
         }
     }
 
     func disconnect() {
-        provider?.disconnect()
-        provider = nil
-        connectionInfo = nil
-        isConnected = false
+        teardownConnection()
         appendHistory(.system("Disconnected."))
     }
-    
+
     func disconnectAndPromptReconnect() {
-        provider?.disconnect()
-        provider = nil
-        connectionInfo = nil
-        isConnected = false
+        teardownConnection()
         history.removeAll()
         isShowingConnectionSheet = true
     }
-    
-    func reconnectToDatabase(_ dbName: String) {
+
+    /// Stop any running query and close the connection off the main thread.
+    /// Marks state disconnected *first* so a cancelled query's recovery path
+    /// knows not to reconnect.
+    private func teardownConnection() {
+        isConnected = false
+        connectionInfo = nil
+        runningTask?.cancel()
+        runningTask = nil
+        session.cancel()                 // unblock anything in flight on the queue
+        let session = self.session
+        Task.detached { await session.disconnect() }
+    }
+
+    /// Switch the active connection to another database on the same server
+    /// (Postgres binds one database per connection). Reuses the current session's
+    /// credentials, so there is no re-prompt. Runs off the main thread.
+    func reconnectToDatabase(_ dbName: String) async {
         guard let previousConfig = connectionInfo else {
             appendHistory(.error("No active connection to switch from."))
             return
         }
 
-        // Postgres binds a connection to one database, so switching means a fresh
-        // connection — but reusing the current session's credentials, so there's
-        // no re-prompt. Quietly tear down the current one first.
-        provider?.disconnect()
-        provider = nil
-        isConnected = false
-
         var config = previousConfig
         config.databaseName = dbName
 
-        let newProvider = DatabaseProviderFactory.provider(for: config.engine)
         do {
-            try newProvider.connect(with: config)
-            self.provider = newProvider
-            self.connectionInfo = config
-            self.isConnected = true
+            // `session.connect` quietly tears down the current connection first.
+            try await session.connect(config)
+            connectionInfo = config
+            isConnected = true
             appendHistory(.system("Switched to database \"\(dbName)\"."))
         } catch {
             // The switch failed (no access, no such database, …). Report a clear
             // reason and quietly restore the previous database — no reconnect
             // chatter.
             let reason = friendlySwitchError(error, database: dbName)
-            let fallback = DatabaseProviderFactory.provider(for: previousConfig.engine)
-            if (try? fallback.connect(with: previousConfig)) != nil {
-                self.provider = fallback
-                self.connectionInfo = previousConfig
-                self.isConnected = true
+            do {
+                try await session.connect(previousConfig)
+                connectionInfo = previousConfig
+                isConnected = true
                 appendHistory(.error("\(reason) Still connected to \"\(previousConfig.databaseName)\"."))
-            } else {
+            } catch {
+                connectionInfo = nil
+                isConnected = false
                 appendHistory(.error("\(reason) The previous connection was also lost — please reconnect."))
             }
         }
@@ -165,11 +186,13 @@ final class TerminalViewModel: ObservableObject {
     // MARK: - Query execution (called by ⌘E)
 
     func executeCurrentQuery() {
-        guard let provider = provider, provider.isConnected else {
+        // One operation at a time; ignore ⌘E while a query or connect is busy.
+        guard !isRunning, !isConnecting else { return }
+        guard isConnected else {
             appendHistory(.error("Not connected to any database."))
             return
         }
-        
+
         // Fix smart quotes/dashes that macOS may have inserted
         let input = sqlText
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -179,7 +202,7 @@ final class TerminalViewModel: ObservableObject {
             .replacingOccurrences(of: "\u{2019}", with: "'")   // right single '
             .replacingOccurrences(of: "\u{2013}", with: "-")   // en dash –
             .replacingOccurrences(of: "\u{2014}", with: "-")   // em dash —
-        
+
         guard !input.isEmpty else { return }
 
         // Save to command history (avoid duplicating the last entry)
@@ -189,34 +212,23 @@ final class TerminalViewModel: ObservableObject {
         historyIndex = -1
         savedCurrentInput = ""
 
-        // Echo the input
+        // Echo the input and clear the editor right away.
         appendHistory(.input(input))
+        sqlText = ""
 
-        // Check if it's a dot-command
-        let currentEngine = provider.engine
+        // Dot-commands are parsed on the main thread (pure + instant); only the
+        // ones that actually hit the database are dispatched off-main.
+        let currentEngine = connectionInfo?.engine ?? .sqlite
         if let dotResult = DotCommandHandler.handle(input, engine: currentEngine) {
             switch dotResult {
             case .sql(let sql):
-                let result = provider.execute(sql: sql)
-                if let error = result.error {
-                    appendHistory(.error(error))
-                } else {
-                    appendHistory(.result(result))
-                }
+                runStatements([sql])
 
             case .multiSQL(let statements):
-                for sql in statements {
-                    let result = provider.execute(sql: sql)
-                    if let error = result.error {
-                        appendHistory(.error(error))
-                    } else {
-                        appendHistory(.result(result))
-                    }
-                }
-     
-            case .reconnect(let dbName):
-                reconnectToDatabase(dbName)
+                runStatements(statements)
 
+            case .reconnect(let dbName):
+                runReconnect(dbName)
 
             case .message(let text):
                 appendHistory(.system(text))
@@ -225,17 +237,87 @@ final class TerminalViewModel: ObservableObject {
                 history.removeAll()
             }
         } else {
-            // Regular SQL
-            let result = provider.execute(sql: input)
-            if let error = result.error {
-                appendHistory(.error(error))
-            } else {
-                appendHistory(.result(result))
+            // Regular SQL — the provider splits multi-statement input itself.
+            runStatements([input])
+        }
+    }
+
+    /// Execute `statements` one at a time on the background session, appending a
+    /// result (or error) per statement — matching the previous synchronous
+    /// behaviour, including continuing past a failed statement in a `.multiSQL`
+    /// batch. If the task is cancelled mid-flight, the running statement is
+    /// interrupted and a single "cancelled" notice is shown instead.
+    private func runStatements(_ statements: [String]) {
+        // Set synchronously (before the task is scheduled) so a second ⌘E can't
+        // slip past the `guard !isRunning` before the task body starts.
+        isRunning = true
+        runningTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                self.isRunning = false
+                self.runningTask = nil
+            }
+
+            var wasCancelled = false
+            for sql in statements {
+                if Task.isCancelled { wasCancelled = true; break }
+                let result = await self.session.execute(sql)
+                // A cancel unblocks the query with a throwaway error; discard it.
+                if Task.isCancelled { wasCancelled = true; break }
+                if let error = result.error {
+                    self.appendHistory(.error(error))
+                } else {
+                    self.appendHistory(.result(result))
+                }
+            }
+
+            if wasCancelled {
+                // Stay quiet during teardown (isConnected already false).
+                if self.isConnected {
+                    self.appendHistory(.system("Query cancelled."))
+                }
+                await self.recoverAfterCancel()
             }
         }
+    }
 
-        // Clear the editor after execution
-        sqlText = ""
+    /// Drive `reconnectToDatabase` as the in-flight task with a connecting (not
+    /// cancellable-query) indicator.
+    private func runReconnect(_ dbName: String) {
+        // Set synchronously so the busy-guard is effective before the task starts.
+        isConnecting = true
+        runningTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                self.isConnecting = false
+                self.runningTask = nil
+            }
+            await self.reconnectToDatabase(dbName)
+        }
+    }
+
+    /// After a successful cancel, Postgres' socket has been force-closed and the
+    /// connection is dead — transparently reconnect (reusing the session's
+    /// credentials) so the window stays usable. SQLite's interrupt leaves the
+    /// connection intact, so nothing is needed there.
+    private func recoverAfterCancel() async {
+        guard isConnected,
+              let config = connectionInfo,
+              config.engine == .postgres else { return }
+        do {
+            try await session.connect(config)
+            appendHistory(.system("Reconnected to \(config.displayName)."))
+        } catch {
+            isConnected = false
+            appendHistory(.error("The connection was closed to cancel the query and could not be re-established: \(error.localizedDescription)"))
+        }
+    }
+
+    /// Cancel a running query (no effect on a connect/reconnect, which can't be
+    /// interrupted cleanly). Invoked by the Cancel toolbar button / ⌘.
+    func cancelRunningQuery() {
+        guard isRunning else { return }
+        runningTask?.cancel()   // fires DatabaseSession's cancellation handler
     }
 
     // MARK: - History

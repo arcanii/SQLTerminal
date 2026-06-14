@@ -21,7 +21,13 @@
 import Foundation
 
 /// A unified result type every provider returns after executing SQL.
-struct QueryResult: Identifiable {
+///
+/// `nonisolated` + `Sendable`: a provider builds this on `DatabaseSession`'s
+/// background queue and it is then handed to the `@MainActor` view model, so it
+/// must be safe to construct off the main actor and to cross actor boundaries.
+/// (Without opting out, the project's `MainActor` default isolation would make
+/// even the static `failure` factory main-actor-isolated.)
+nonisolated struct QueryResult: Identifiable, Sendable {
     let id = UUID()
     let columns: [String]
     let rows: [[String]]

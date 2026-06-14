@@ -20,8 +20,8 @@
 import Foundation
 import SQLite3
 
-final class SQLiteProvider: DatabaseProvider {
-    
+nonisolated final class SQLiteProvider: DatabaseProvider {
+
     let engine: DatabaseEngine = .sqlite
     private(set) var isConnected = false
     private(set) var statusMessage = "Disconnected"
@@ -82,7 +82,21 @@ final class SQLiteProvider: DatabaseProvider {
         accessedURL?.stopAccessingSecurityScopedResource()
         accessedURL = nil
     }
-    
+
+    // MARK: - Cancel
+
+    /// Interrupt the running statement. `sqlite3_interrupt` is documented as safe
+    /// to call from a different thread than the one running `sqlite3_step`; the
+    /// step returns `SQLITE_INTERRUPT` and `execute` surfaces it as an error.
+    /// Unlike Postgres, the connection stays open and usable afterwards.
+    ///
+    /// `DatabaseSession` serialises this against `connect`/`disconnect`, so the
+    /// `db` handle can't be closed out from under the interrupt.
+    func cancel() {
+        if let db {
+            sqlite3_interrupt(db)
+        }
+    }
 
     // MARK: - Execute
 

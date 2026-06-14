@@ -24,7 +24,11 @@ import Foundation
 ///
 /// To add PostgreSQL support later, create a class that conforms to
 /// `DatabaseProvider` and you're done — the UI doesn't change at all.
-protocol DatabaseProvider: AnyObject {
+///
+/// The protocol is `nonisolated` (the project defaults declarations to
+/// `@MainActor`) because providers are driven entirely from a `DatabaseSession`'s
+/// background serial queue — never the main actor. See `DatabaseSession`.
+nonisolated protocol DatabaseProvider: AnyObject {
 
     /// Which engine this provider represents.
     var engine: DatabaseEngine { get }
@@ -43,5 +47,14 @@ protocol DatabaseProvider: AnyObject {
 
     /// Execute arbitrary SQL and return a unified `QueryResult`.
     func execute(sql: String) -> QueryResult
+
+    /// Interrupt the query currently running in `execute(sql:)`.
+    ///
+    /// **Must be safe to call from a different thread than the one executing**,
+    /// since cancellation arrives while `execute(sql:)` is blocked on I/O. The
+    /// in-flight call is expected to unblock and return (typically an error).
+    /// Implementations may leave the connection unusable afterwards (Postgres
+    /// closes the socket); callers should reconnect if `isConnected` allows.
+    func cancel()
 }
 

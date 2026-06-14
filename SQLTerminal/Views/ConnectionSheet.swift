@@ -71,11 +71,17 @@ struct ConnectionSheet: View {
 
                 Spacer()
 
+                if terminalVM.isConnecting {
+                    ProgressView()
+                        .controlSize(.small)
+                        .padding(.trailing, 4)
+                }
+
                 Button("Connect") {
                     attemptConnection()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(!vm.canConnect)
+                .disabled(!vm.canConnect || terminalVM.isConnecting)
             }
             .padding()
         }
@@ -240,12 +246,17 @@ struct ConnectionSheet: View {
     private func attemptConnection() {
         vm.errorMessage = nil
         vm.connection.securityScopedURL = vm.securityScopedURL
-        terminalVM.connect(with: vm.connection)
-        if terminalVM.isConnected {
-            vm.saveLastConnection()
-            dismiss()
-        } else {
-            vm.errorMessage = "Connection failed. Check your settings."
+        let config = vm.connection
+        Task {
+            // Connect runs off the main thread, so the UI stays responsive and an
+            // unreachable host no longer hangs the app.
+            let connected = await terminalVM.connect(with: config)
+            if connected {
+                vm.saveLastConnection()
+                dismiss()
+            } else {
+                vm.errorMessage = "Connection failed. Check your settings."
+            }
         }
     }
 

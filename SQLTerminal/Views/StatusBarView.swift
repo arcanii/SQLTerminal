@@ -34,6 +34,15 @@ struct StatusBarView: View {
                 .font(.system(.caption, design: .monospaced))
                 .lineLimit(1)
 
+            if vm.isRunning || vm.isConnecting {
+                ProgressView()
+                    .controlSize(.small)
+                    .scaleEffect(0.7)
+                Text(vm.isRunning ? "Running…" : "Connecting…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Spacer()
 
             Text("⌘E Execute  ⌘↑ Prev  ⌘↓ Next")
