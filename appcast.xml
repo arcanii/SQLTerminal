@@ -9,6 +9,28 @@
         <language>en</language>
 
         <item>
+            <title>v1.1.4</title>
+            <pubDate>Sun, 14 Jun 2026 12:16:07 +0000</pubDate>
+            <sparkle:version>4</sparkle:version>
+            <sparkle:shortVersionString>1.1.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.2</sparkle:minimumSystemVersion>
+            <link>https://github.com/arcanii/SQLTerminal/releases/tag/v1.1.4</link>
+            <description><![CDATA[
+                <h2>SQLTerminal 1.1.4</h2>
+                <ul>
+                    <li><b>SQL syntax highlighting</b> in the editor.</li>
+                    <li><b>Persistent, searchable query history + snippets</b> — a toolbar panel for past queries and saved snippets.</li>
+                    <li><b>Sortable result columns</b> and a <b>cell detail view</b> (with JSON formatting).</li>
+                    <li><b>In-app Help</b> (⌘?).</li>
+                </ul>
+            ]]></description>
+            <enclosure
+                url="https://github.com/arcanii/SQLTerminal/releases/download/v1.1.4/SQLTerminal-v1.1.4.dmg"
+                sparkle:edSignature="Q3itW3/bE/TKS6AMdJ5cnXFpIY8dZDVaLrC9rs34JKe8wmdEWiexwKWUjtqjVNXvGZjvBBhYj2eLQ2Q1+5tMAw==" length="4557625"
+                type="application/octet-stream"/>
+        </item>
+
+        <item>
             <title>v1.1.3</title>
             <pubDate>Sun, 14 Jun 2026 09:44:51 +0000</pubDate>
             <sparkle:version>3</sparkle:version>
