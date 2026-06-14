@@ -451,6 +451,65 @@ final class TerminalViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Schema browsing
+
+    /// Table names for the current connection (public schema for Postgres), run as
+    /// background metadata — off-main, no history echo, not task-cancellable so it
+    /// never tears down the live connection.
+    func fetchTableNames() async -> [String] {
+        guard isConnected, let engine = connectionInfo?.engine else { return [] }
+        let sql: String
+        switch engine {
+        case .postgres:
+            sql = "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;"
+        case .sqlite:
+            sql = "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name;"
+        }
+        let result = await session.executeUncancellable(sql)
+        guard result.error == nil else { return [] }
+        return result.rows.compactMap { $0.first }
+    }
+
+    /// Column (name, type) pairs for `table`.
+    func fetchColumns(forTable table: String) async -> [SchemaColumn] {
+        guard isConnected, let engine = connectionInfo?.engine else { return [] }
+        let literal = table.replacingOccurrences(of: "'", with: "''")
+        let sql: String
+        switch engine {
+        case .postgres:
+            sql = """
+            SELECT column_name, data_type FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = '\(literal)'
+            ORDER BY ordinal_position;
+            """
+        case .sqlite:
+            sql = "PRAGMA table_info('\(literal)');"   // cols: cid, name, type, …
+        }
+        let result = await session.executeUncancellable(sql)
+        guard result.error == nil else { return [] }
+        switch engine {
+        case .postgres:
+            return result.rows.map { SchemaColumn(name: $0.first ?? "", type: $0.count > 1 ? $0[1] : "") }
+        case .sqlite:
+            return result.rows.map { SchemaColumn(name: $0.count > 1 ? $0[1] : "", type: $0.count > 2 ? $0[2] : "") }
+        }
+    }
+
+    /// Put a starter `SELECT` for `table` into the editor (does not run it).
+    func insertSelectStatement(forTable table: String) {
+        sqlText = "SELECT * FROM \(Self.quotedIdentifier(table)) LIMIT 100;"
+    }
+
+    /// Run a quick preview of `table` (does not touch the editor).
+    func previewTable(_ table: String) {
+        runText("SELECT * FROM \(Self.quotedIdentifier(table)) LIMIT 100", clearEditorAfterwards: false)
+    }
+
+    /// Double-quote an identifier (works for both engines), escaping any quotes.
+    private static func quotedIdentifier(_ name: String) -> String {
+        "\"" + name.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+    }
+
     // MARK: - History
 
     private func appendHistory(_ entry: HistoryEntry) {
@@ -465,6 +524,15 @@ struct PendingConfirmation: Identifiable {
     let id = UUID()
     let statements: [String]
     let message: String
+}
+
+// MARK: - Schema
+
+/// A column in the schema sidebar.
+struct SchemaColumn: Identifiable, Hashable {
+    let name: String
+    let type: String
+    var id: String { name }
 }
 
 // MARK: - History entry model

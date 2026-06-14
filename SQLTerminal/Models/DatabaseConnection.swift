@@ -20,7 +20,7 @@
 
 import Foundation
 
-struct DatabaseConnection {
+struct DatabaseConnection: Equatable {
     var engine: DatabaseEngine = .sqlite
     var filePath: String = ""
     var host: String = "localhost"

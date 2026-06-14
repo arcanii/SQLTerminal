@@ -133,6 +133,21 @@ nonisolated final class DatabaseSession: @unchecked Sendable {
         }
     }
 
+    /// Like `execute`, but NOT tied to `Task` cancellation. Used for background
+    /// metadata queries (schema browsing): if the caller's task is cancelled we
+    /// must let the query finish quietly rather than fire `cancel()`, which would
+    /// `closeAbruptly()` the user's live connection mid-session.
+    func executeUncancellable(_ sql: String) async -> QueryResult {
+        await withCheckedContinuation { (cont: CheckedContinuation<QueryResult, Never>) in
+            queue.async {
+                let provider = self.lock.withLock { self.provider }
+                let result = provider?.execute(sql: sql)
+                    ?? .failure("No database connection.")
+                cont.resume(returning: result)
+            }
+        }
+    }
+
     // MARK: - Cancel
 
     /// Interrupt an in-flight query. Safe to call from any thread; serialised

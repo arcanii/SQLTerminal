@@ -28,47 +28,17 @@ struct TerminalView: View {
     /// The editor's current selection/caret, used to run just the selected SQL
     /// or the statement under the cursor.
     @State private var selection: TextSelection?
+    /// Whether the schema sidebar is shown.
+    @State private var showSidebar = true
 
     var body: some View {
-        GeometryReader { geo in
-            VStack(spacing: 0) {
-
-                // ── Top: History / Output area ──
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 6) {
-                            ForEach(Array(vm.history.enumerated()), id: \.offset) { index, entry in
-                                historyRow(entry)
-                                    .id(index)
-                            }
-                        }
-                        .padding()
-                        // Let the user click-drag to select text anywhere in the
-                        // output pane. Applied here, it propagates through the
-                        // environment to every Text below — history rows and the
-                        // result-table cells alike.
-                        .textSelection(.enabled)
-                    }
-                    .onChange(of: vm.history.count) { _, _ in
-                        withAnimation {
-                            proxy.scrollTo(vm.history.count - 1, anchor: .bottom)
-                        }
-                    }
-                }
-                .background(Color(nsColor: .textBackgroundColor))
-
-                // ── Draggable divider ──
-                DragDivider(editorHeight: $editorHeight, totalHeight: geo.size.height)
-
-                // ── Bottom: SQL Input area ──
-                sqlInputArea
-                    .frame(height: editorHeight)
-
+        HStack(spacing: 0) {
+            if showSidebar {
+                SchemaSidebarView()
+                    .frame(width: 240)
                 Divider()
-
-                // ── Status bar ──
-                StatusBarView()
             }
+            terminalPane
         }
         .sheet(isPresented: $vm.isShowingConnectionSheet) {
             ConnectionSheet()
@@ -88,6 +58,14 @@ struct TerminalView: View {
             Text(pending.message)
         }
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    showSidebar.toggle()
+                } label: {
+                    Label("Toggle Sidebar", systemImage: "sidebar.left")
+                }
+                .help("Show or hide the schema sidebar")
+            }
             ToolbarItemGroup(placement: .primaryAction) {
                 Toggle(isOn: $vm.isReadOnly) {
                     Label("Read-only", systemImage: "pencil.slash")
@@ -163,6 +141,51 @@ struct TerminalView: View {
                     Label("Reconnect", systemImage: "arrow.triangle.2.circlepath")
                 }
                 .disabled(vm.isRunning || vm.isConnecting)
+            }
+        }
+    }
+
+    // MARK: - Terminal pane (history + editor + status bar)
+
+    private var terminalPane: some View {
+        GeometryReader { geo in
+            VStack(spacing: 0) {
+
+                // ── Top: History / Output area ──
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 6) {
+                            ForEach(Array(vm.history.enumerated()), id: \.offset) { index, entry in
+                                historyRow(entry)
+                                    .id(index)
+                            }
+                        }
+                        .padding()
+                        // Let the user click-drag to select text anywhere in the
+                        // output pane. Applied here, it propagates through the
+                        // environment to every Text below — history rows and the
+                        // result-table cells alike.
+                        .textSelection(.enabled)
+                    }
+                    .onChange(of: vm.history.count) { _, _ in
+                        withAnimation {
+                            proxy.scrollTo(vm.history.count - 1, anchor: .bottom)
+                        }
+                    }
+                }
+                .background(Color(nsColor: .textBackgroundColor))
+
+                // ── Draggable divider ──
+                DragDivider(editorHeight: $editorHeight, totalHeight: geo.size.height)
+
+                // ── Bottom: SQL Input area ──
+                sqlInputArea
+                    .frame(height: editorHeight)
+
+                Divider()
+
+                // ── Status bar ──
+                StatusBarView()
             }
         }
     }
