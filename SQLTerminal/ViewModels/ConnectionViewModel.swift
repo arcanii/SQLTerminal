@@ -44,6 +44,7 @@ final class ConnectionViewModel: ObservableObject {
         static let port         = "lastPort"
         static let databaseName = "lastDatabaseName"
         static let username     = "lastUsername"
+        static let sslMode      = "lastSSLMode"
     }
 
     // MARK: - Init: load saved connection
@@ -79,6 +80,7 @@ final class ConnectionViewModel: ObservableObject {
         connection.port         = profile.port
         connection.databaseName = profile.databaseName
         connection.username     = profile.username
+        connection.sslMode      = profile.sslMode ?? .prefer
         connection.password     = ""
         securityScopedURL       = nil
         savePassword            = false
@@ -149,6 +151,7 @@ final class ConnectionViewModel: ObservableObject {
         defaults.set(connection.port,            forKey: Keys.port)
         defaults.set(connection.databaseName,    forKey: Keys.databaseName)
         defaults.set(connection.username,        forKey: Keys.username)
+        defaults.set(connection.sslMode.rawValue, forKey: Keys.sslMode)
         // The password is kept in the Keychain (when opted in), never UserDefaults.
         updateStoredPassword()
 
@@ -203,6 +206,11 @@ final class ConnectionViewModel: ObservableObject {
 
         if let username = defaults.string(forKey: Keys.username), !username.isEmpty {
             connection.username = username
+        }
+
+        if let sslRaw = defaults.string(forKey: Keys.sslMode),
+           let mode = SSLMode(rawValue: sslRaw) {
+            connection.sslMode = mode
         }
 
         // Restore a saved password from the Keychain (PostgreSQL only). The login

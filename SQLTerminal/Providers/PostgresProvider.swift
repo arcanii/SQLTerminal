@@ -35,59 +35,76 @@ final class PostgresProvider: DatabaseProvider {
 
     func connect(with config: DatabaseConnection) throws {
         disconnect()
-
-        // Enable logging for troubleshooting
         Postgres.logger.level = .warning
 
+        do {
+            var usedSSL = false
+            switch config.sslMode {
+            case .off:
+                connection = try establish(config, ssl: false)
+            case .require:
+                connection = try establish(config, ssl: true); usedSSL = true
+            case .prefer:
+                do {
+                    connection = try establish(config, ssl: true); usedSSL = true
+                } catch let error where Self.isSSLUnavailable(error) {
+                    // The server doesn't speak SSL — retry unencrypted.
+                    connection = try establish(config, ssl: false)
+                }
+            }
+            isConnected = true
+            statusMessage = "Connected to \(config.username)@\(config.host):\(config.port)/\(config.databaseName)\(usedSSL ? " (SSL)" : "")"
+        } catch {
+            // Could not connect — surface a detailed, actionable message.
+            disconnect()
+            throw PostgresError.connectionFailed(
+                Self.describeConnectionError(error,
+                                             host: config.host,
+                                             port: Int(config.port) ?? 5432,
+                                             database: config.databaseName,
+                                             user: config.username)
+            )
+        }
+    }
+
+    /// Open a connection with the given SSL setting, trying each credential type
+    /// until one is accepted. Throws the raw PostgresClientKit error on failure so
+    /// the caller can detect SSL-unavailability (for `.prefer`) before formatting.
+    private func establish(_ config: DatabaseConnection, ssl: Bool) throws -> Connection {
         var pgConfig = PostgresClientKit.ConnectionConfiguration()
         pgConfig.host = config.host
         pgConfig.port = Int(config.port) ?? 5432
         pgConfig.database = config.databaseName
         pgConfig.user = config.username
-        pgConfig.ssl = false
+        pgConfig.ssl = ssl
 
-        // Try authentication methods in order of likelihood
-        let authMethods: [(String, Credential)] = [
-            ("SCRAM-SHA-256", .scramSHA256(password: config.password)),
-            ("MD5",           .md5Password(password: config.password)),
-            ("Plain",         .cleartextPassword(password: config.password)),
-            ("Trust",         .trust),
+        let credentials: [Credential] = [
+            .scramSHA256(password: config.password),
+            .md5Password(password: config.password),
+            .cleartextPassword(password: config.password),
+            .trust,
         ]
 
         var lastError: Error?
-
-        for (name, credential) in authMethods {
+        for credential in credentials {
             pgConfig.credential = credential
             do {
-                connection = try PostgresClientKit.Connection(configuration: pgConfig)
-                isConnected = true
-                statusMessage = "Connected to \(config.username)@\(config.host):\(config.port)/\(config.databaseName) [\(name)]"
-                return
+                return try PostgresClientKit.Connection(configuration: pgConfig)
             } catch {
                 lastError = error
-                connection = nil
-
-                // The auth-method loop exists only to discover which credential
-                // *type* the server wants. Any other failure — the server
-                // rejected us (wrong password, no pg_hba.conf entry), the host is
-                // unreachable, an SSL problem — will not be fixed by trying a
-                // different credential, so stop now and report the real reason
-                // instead of masking it with the final (Trust) attempt's error.
-                if !Self.isCredentialTypeMismatch(error) {
-                    break
-                }
+                // Only a wrong credential *type* is worth trying another method;
+                // any other failure is terminal.
+                if !Self.isCredentialTypeMismatch(error) { break }
             }
         }
+        throw lastError ?? PostgresError.connectionFailed("All authentication methods failed.")
+    }
 
-        // Could not connect — surface a detailed, actionable message.
-        disconnect()
-        throw PostgresError.connectionFailed(
-            Self.describeConnectionError(lastError,
-                                         host: config.host,
-                                         port: pgConfig.port,
-                                         database: config.databaseName,
-                                         user: config.username)
-        )
+    private static func isSSLUnavailable(_ error: Error) -> Bool {
+        if let pg = error as? PostgresClientKit.PostgresError, case .sslNotSupported = pg {
+            return true
+        }
+        return false
     }
 
     // MARK: - Disconnect

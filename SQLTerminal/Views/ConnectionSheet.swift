@@ -91,7 +91,7 @@ struct ConnectionSheet: View {
 
     /// Size the sheet to its content so every field is visible without scrolling.
     private var sheetHeight: CGFloat {
-        let base: CGFloat = vm.connection.engine == .sqlite ? 380 : 610
+        let base: CGFloat = vm.connection.engine == .sqlite ? 380 : 660
         return base + 56  // the Connections menu row
     }
 
@@ -226,6 +226,12 @@ struct ConnectionSheet: View {
 
             Toggle("Save password in Keychain", isOn: $vm.savePassword)
                 .font(.caption)
+
+            Picker("SSL", selection: $vm.connection.sslMode) {
+                ForEach(SSLMode.allCases) { mode in
+                    Text(mode.label).tag(mode)
+                }
+            }
         }
     }
 

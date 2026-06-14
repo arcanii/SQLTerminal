@@ -1,7 +1,7 @@
 /*
  SQLTerminal - a simple dev tool to connect to {sqlite3, postgres} and run sql commands
      Copyright (C) 2026 bryan.mark@gmail.com
- 
+
      This program is free software: you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
      the Free Software Foundation, either version 3 of the License, or
@@ -28,6 +28,7 @@ struct DatabaseConnection {
     var databaseName: String = ""
     var username: String = ""
     var password: String = ""
+    var sslMode: SSLMode = .prefer
 
     /// Security-scoped URL from NSOpenPanel/NSSavePanel (sandbox support)
     var securityScopedURL: URL?
@@ -42,4 +43,25 @@ struct DatabaseConnection {
         }
     }
 
+}
+
+/// How to use SSL/TLS for a PostgreSQL connection. (PostgresClientKit encrypts
+/// without authenticating the server certificate, i.e. like `sslmode=require`.)
+enum SSLMode: String, Codable, CaseIterable, Identifiable {
+    /// No encryption.
+    case off
+    /// Use SSL if the server supports it, otherwise connect unencrypted (default).
+    case prefer
+    /// Always use SSL; fail if the server doesn't support it.
+    case require
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .off:     return "Off"
+        case .prefer:  return "Prefer"
+        case .require: return "Require"
+        }
+    }
 }

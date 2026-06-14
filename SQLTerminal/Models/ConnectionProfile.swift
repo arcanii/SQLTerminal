@@ -33,6 +33,8 @@ struct ConnectionProfile: Codable, Identifiable {
     var port: String
     var databaseName: String
     var username: String
+    /// Optional for backward compatibility with profiles saved before SSL support.
+    var sslMode: SSLMode?
 
     init(_ connection: DatabaseConnection, name: String? = nil) {
         self.name    = name
@@ -42,6 +44,7 @@ struct ConnectionProfile: Codable, Identifiable {
         port         = connection.port
         databaseName = connection.databaseName
         username     = connection.username
+        sslMode      = connection.sslMode
     }
 
     /// Stable identity: by name for saved profiles, by connection for recents.
