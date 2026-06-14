@@ -25,6 +25,9 @@ import AppKit
 struct TerminalView: View {
     @EnvironmentObject var vm: TerminalViewModel
     @State private var editorHeight: CGFloat = 150
+    /// The editor's current selection/caret, used to run just the selected SQL
+    /// or the statement under the cursor.
+    @State private var selection: TextSelection?
 
     var body: some View {
         GeometryReader { geo in
@@ -114,7 +117,16 @@ struct TerminalView: View {
                     } label: {
                         Label("Execute (⌘E)", systemImage: "play.fill")
                     }
-                    .help("Execute query (⌘E)")
+                    .help("Execute the whole editor (⌘E)")
+                    .disabled(!vm.isConnected || vm.isConnecting)
+
+                    Button {
+                        vm.executeSnippet(snippetToRun())
+                    } label: {
+                        Label("Run Selection (⌘↩)", systemImage: "play.rectangle")
+                    }
+                    .help("Run the selected SQL, or the statement under the cursor (⌘↩)")
+                    .keyboardShortcut(.return, modifiers: .command)
                     .disabled(!vm.isConnected || vm.isConnecting)
                 }
 
@@ -144,7 +156,7 @@ struct TerminalView: View {
             .padding(.horizontal, 12)
             .padding(.top, 6)
 
-            TextEditor(text: $vm.sqlText)
+            TextEditor(text: $vm.sqlText, selection: $selection)
                 .font(.system(.body, design: .monospaced))
                 .scrollContentBackground(.hidden)
                 .autocorrectionDisabled(true)
@@ -214,6 +226,26 @@ struct TerminalView: View {
                         copyToClipboard(msg)
                     }
                 }
+        }
+    }
+
+    // MARK: - Run selection / statement-at-cursor
+
+    /// The SQL to run for ⌘↩: the selected text, or the statement under the caret
+    /// when nothing is selected. Returns `nil` to fall back to the whole editor.
+    private func snippetToRun() -> String? {
+        guard let selection else { return nil }
+        switch selection.indices {
+        case .selection(let range):
+            if range.isEmpty {
+                let offset = vm.sqlText.distance(from: vm.sqlText.startIndex, to: range.lowerBound)
+                return SQLStatementSplitter.statement(atOffset: offset, in: vm.sqlText)
+            }
+            return String(vm.sqlText[range])
+        case .multiSelection(let rangeSet):
+            return rangeSet.ranges.map { String(vm.sqlText[$0]) }.joined(separator: "\n")
+        @unknown default:
+            return nil
         }
     }
 

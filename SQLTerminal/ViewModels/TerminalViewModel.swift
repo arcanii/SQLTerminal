@@ -201,24 +201,32 @@ final class TerminalViewModel: ObservableObject {
 
     // MARK: - Query execution (called by ⌘E)
 
+    /// Run the whole editor (⌘E), clearing it afterwards.
     func executeCurrentQuery() {
-        // One operation at a time; ignore ⌘E while a query or connect is busy.
+        runText(sqlText, clearEditorAfterwards: true)
+    }
+
+    /// Run just `snippet` — the selected SQL, or the statement under the cursor —
+    /// without clearing the editor (⌘↩). Falls back to the whole editor when the
+    /// snippet is empty (e.g. nothing selected and the cursor is between statements).
+    func executeSnippet(_ snippet: String?) {
+        let trimmed = snippet?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmed.isEmpty {
+            executeCurrentQuery()
+        } else {
+            runText(trimmed, clearEditorAfterwards: false)
+        }
+    }
+
+    private func runText(_ rawText: String, clearEditorAfterwards: Bool) {
+        // One operation at a time; ignore while a query or connect is busy.
         guard !isRunning, !isConnecting else { return }
         guard isConnected else {
             appendHistory(.error("Not connected to any database."))
             return
         }
 
-        // Fix smart quotes/dashes that macOS may have inserted
-        let input = sqlText
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "\u{201C}", with: "\"")  // left double "
-            .replacingOccurrences(of: "\u{201D}", with: "\"")  // right double "
-            .replacingOccurrences(of: "\u{2018}", with: "'")   // left single '
-            .replacingOccurrences(of: "\u{2019}", with: "'")   // right single '
-            .replacingOccurrences(of: "\u{2013}", with: "-")   // en dash –
-            .replacingOccurrences(of: "\u{2014}", with: "-")   // em dash —
-
+        let input = Self.normalizingSmartCharacters(rawText)
         guard !input.isEmpty else { return }
 
         // Save to command history (avoid duplicating the last entry)
@@ -228,9 +236,11 @@ final class TerminalViewModel: ObservableObject {
         historyIndex = -1
         savedCurrentInput = ""
 
-        // Echo the input and clear the editor right away.
+        // Echo the input; clear the editor only for a whole-editor run.
         appendHistory(.input(input))
-        sqlText = ""
+        if clearEditorAfterwards {
+            sqlText = ""
+        }
 
         // Dot-commands are parsed on the main thread (pure + instant); only the
         // ones that actually hit the database are dispatched off-main.
@@ -256,6 +266,17 @@ final class TerminalViewModel: ObservableObject {
             // Regular SQL — the provider splits multi-statement input itself.
             guardedRun([input])
         }
+    }
+
+    /// Trim and normalise the macOS "smart" quotes/dashes that would break SQL.
+    private static func normalizingSmartCharacters(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\u{201C}", with: "\"")  // left double "
+            .replacingOccurrences(of: "\u{201D}", with: "\"")  // right double "
+            .replacingOccurrences(of: "\u{2018}", with: "'")   // left single '
+            .replacingOccurrences(of: "\u{2019}", with: "'")   // right single '
+            .replacingOccurrences(of: "\u{2013}", with: "-")   // en dash –
+            .replacingOccurrences(of: "\u{2014}", with: "-")   // em dash —
     }
 
     /// Apply the read-only block and the destructive-statement confirmation before
