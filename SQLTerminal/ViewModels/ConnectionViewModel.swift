@@ -30,6 +30,8 @@ final class ConnectionViewModel: ObservableObject {
     @Published var securityScopedURL: URL?
     /// Whether to persist this connection's password in the Keychain.
     @Published var savePassword = false
+    /// Most-recently-used connections (no passwords).
+    @Published var recents: [ConnectionProfile] = []
 
     // MARK: - UserDefaults keys
 
@@ -46,6 +48,7 @@ final class ConnectionViewModel: ObservableObject {
 
     init() {
         loadLastConnection()
+        recents = RecentConnectionsStore.load()
     }
 
     // MARK: - Computed
@@ -60,6 +63,34 @@ final class ConnectionViewModel: ObservableObject {
                 && !connection.databaseName.isEmpty
                 && !connection.username.isEmpty
         }
+    }
+
+    // MARK: - Recents
+
+    /// Fill the form from a saved profile, restoring its password from the
+    /// Keychain when one was stored.
+    func apply(_ profile: ConnectionProfile) {
+        connection.engine       = profile.engine
+        connection.filePath     = profile.filePath
+        connection.host         = profile.host
+        connection.port         = profile.port
+        connection.databaseName = profile.databaseName
+        connection.username     = profile.username
+        connection.password     = ""
+        securityScopedURL       = nil
+        savePassword            = false
+        errorMessage            = nil
+
+        if profile.engine == .postgres,
+           let stored = KeychainHelper.password(account: KeychainHelper.account(for: connection)) {
+            connection.password = stored
+            savePassword = true
+        }
+    }
+
+    func clearRecents() {
+        RecentConnectionsStore.clear()
+        recents = []
     }
 
     // MARK: - File browsing
@@ -102,6 +133,10 @@ final class ConnectionViewModel: ObservableObject {
         defaults.set(connection.username,        forKey: Keys.username)
         // The password is kept in the Keychain (when opted in), never UserDefaults.
         updateStoredPassword()
+
+        // Remember this connection in Recents.
+        RecentConnectionsStore.add(ConnectionProfile(connection))
+        recents = RecentConnectionsStore.load()
     }
 
     /// Persist just the engine choice immediately. `saveLastConnection()` only

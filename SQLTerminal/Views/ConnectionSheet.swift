@@ -39,6 +39,9 @@ struct ConnectionSheet: View {
 
             // ── Form ──
             Form {
+                if !vm.recents.isEmpty {
+                    recentsSection
+                }
                 enginePicker
                 if vm.connection.engine == .sqlite {
                     sqliteFields
@@ -76,10 +79,13 @@ struct ConnectionSheet: View {
             }
             .padding()
         }
-        // SQLite needs one field; PostgreSQL needs the full server form. Size the
-        // sheet to the engine so every field is visible at once instead of hidden
-        // below the fold in a scrolling form.
-        .frame(width: 520, height: vm.connection.engine == .sqlite ? 380 : 610)
+        .frame(width: 520, height: sheetHeight)
+    }
+
+    /// Size the sheet to its content so every field is visible without scrolling.
+    private var sheetHeight: CGFloat {
+        let base: CGFloat = vm.connection.engine == .sqlite ? 380 : 610
+        return base + (vm.recents.isEmpty ? 0 : 56)
     }
 
     // MARK: - Sub-views
@@ -99,6 +105,20 @@ struct ConnectionSheet: View {
         .padding(.bottom, 12)
     }
 
+    private var recentsSection: some View {
+        Section {
+            Menu {
+                ForEach(vm.recents) { profile in
+                    Button(profile.displayName) { vm.apply(profile) }
+                }
+                Divider()
+                Button("Clear Recents", role: .destructive) { vm.clearRecents() }
+            } label: {
+                Label("Recent Connection", systemImage: "clock.arrow.circlepath")
+            }
+        }
+    }
+
     private var enginePicker: some View {
         Picker("Engine", selection: $vm.connection.engine) {
             ForEach(DatabaseEngine.allCases) { engine in
@@ -107,7 +127,11 @@ struct ConnectionSheet: View {
         }
         .pickerStyle(.segmented)
         .onChange(of: vm.connection.engine) { _, newValue in
-            vm.connection.port = newValue.defaultPort
+            // Default the port when switching to an engine that needs one, but
+            // don't clobber a port that's already set (e.g. from a recent).
+            if vm.connection.port.isEmpty {
+                vm.connection.port = newValue.defaultPort
+            }
             vm.errorMessage = nil
             // Remember the engine even if the user never completes a connection,
             // so the sheet reopens to the engine they last picked.
