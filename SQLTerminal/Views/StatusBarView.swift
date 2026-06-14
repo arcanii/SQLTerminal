@@ -72,6 +72,13 @@ struct StatusBarView: View {
                     .help("Writes are blocked in this window")
             }
 
+            if vm.inTransaction {
+                Label("In transaction", systemImage: "arrow.triangle.branch")
+                    .font(.caption2)
+                    .foregroundStyle(.yellow)
+                    .help("A transaction is open — Commit or Rollback to finish")
+            }
+
             Spacer()
 
             Text("⌘E Execute  ⌘↑ Prev  ⌘↓ Next")

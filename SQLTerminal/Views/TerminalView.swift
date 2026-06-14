@@ -130,6 +130,33 @@ struct TerminalView: View {
                     .disabled(!vm.isConnected || vm.isConnecting)
                 }
 
+                Menu {
+                    Button {
+                        vm.beginTransaction()
+                    } label: {
+                        Label("Begin", systemImage: "play.circle")
+                    }
+                    .disabled(vm.inTransaction)
+
+                    Button {
+                        vm.commitTransaction()
+                    } label: {
+                        Label("Commit", systemImage: "checkmark.circle")
+                    }
+                    .disabled(!vm.inTransaction)
+
+                    Button(role: .destructive) {
+                        vm.rollbackTransaction()
+                    } label: {
+                        Label("Rollback", systemImage: "arrow.uturn.backward.circle")
+                    }
+                    .disabled(!vm.inTransaction)
+                } label: {
+                    Label("Transaction", systemImage: "arrow.triangle.branch")
+                }
+                .help(vm.inTransaction ? "A transaction is open" : "Begin / Commit / Rollback")
+                .disabled(!vm.isConnected || vm.isRunning || vm.isConnecting)
+
                 Button {
                     vm.isShowingConnectionSheet = true
                 } label: {

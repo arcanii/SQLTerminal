@@ -50,6 +50,10 @@ final class TerminalViewModel: ObservableObject {
     /// view presents a dialog bound to this.
     @Published var pendingConfirmation: PendingConfirmation?
 
+    /// Whether a transaction is open (tracked heuristically from the
+    /// BEGIN/COMMIT/ROLLBACK statements that run). Reset by any (re)connect.
+    @Published var inTransaction = false
+
     // MARK: - Command history
 
     private var commandHistory: [String] = []
@@ -79,6 +83,7 @@ final class TerminalViewModel: ObservableObject {
             connectionInfo = config
             isConnected = true
             isSSLActive = session.isSSLActive
+            inTransaction = false
             appendHistory(.system("Connected to \(config.displayName)"))
             return true
         } catch {
@@ -107,6 +112,7 @@ final class TerminalViewModel: ObservableObject {
     private func teardownConnection() {
         isConnected = false
         isSSLActive = false
+        inTransaction = false
         connectionInfo = nil
         runningTask?.cancel()
         runningTask = nil
@@ -133,6 +139,7 @@ final class TerminalViewModel: ObservableObject {
             connectionInfo = config
             isConnected = true
             isSSLActive = session.isSSLActive
+            inTransaction = false
             appendHistory(.system("Switched to database \"\(dbName)\"."))
         } catch {
             // The switch failed (no access, no such database, …). Report a clear
@@ -144,6 +151,7 @@ final class TerminalViewModel: ObservableObject {
                 connectionInfo = previousConfig
                 isConnected = true
                 isSSLActive = session.isSSLActive
+                inTransaction = false
                 appendHistory(.error("\(reason) Still connected to \"\(previousConfig.databaseName)\"."))
             } catch {
                 connectionInfo = nil
@@ -364,6 +372,8 @@ final class TerminalViewModel: ObservableObject {
                     self.appendHistory(.system("Query cancelled."))
                 }
                 await self.recoverAfterCancel()
+            } else {
+                self.updateTransactionState(after: statements)
             }
         }
     }
@@ -394,10 +404,12 @@ final class TerminalViewModel: ObservableObject {
         do {
             try await session.connect(config)
             isSSLActive = session.isSSLActive
+            inTransaction = false   // the force-closed transaction is gone
             appendHistory(.system("Reconnected to \(config.displayName)."))
         } catch {
             isConnected = false
             isSSLActive = false
+            inTransaction = false
             appendHistory(.error("The connection was closed to cancel the query and could not be re-established: \(error.localizedDescription)"))
         }
     }
@@ -407,6 +419,36 @@ final class TerminalViewModel: ObservableObject {
     func cancelRunningQuery() {
         guard isRunning else { return }
         runningTask?.cancel()   // fires DatabaseSession's cancellation handler
+    }
+
+    // MARK: - Transactions
+
+    /// Open a transaction. Convenience for the toolbar; equivalent to typing BEGIN.
+    func beginTransaction() { runText("BEGIN", clearEditorAfterwards: false) }
+
+    /// Commit the open transaction.
+    func commitTransaction() { runText("COMMIT", clearEditorAfterwards: false) }
+
+    /// Roll back the open transaction.
+    func rollbackTransaction() { runText("ROLLBACK", clearEditorAfterwards: false) }
+
+    /// Update `inTransaction` from the transaction-control statements that ran.
+    /// Heuristic: the last BEGIN/COMMIT/ROLLBACK in the batch wins. Good enough
+    /// for the common cases without a server round-trip to read the real status;
+    /// a wrong guess self-corrects on the next statement (Postgres reports an
+    /// aborted transaction) and on any reconnect.
+    private func updateTransactionState(after statements: [String]) {
+        let ran = statements.flatMap { SQLStatementSplitter.split($0) }
+        for stmt in ran {
+            switch SQLStatementClassifier.classify(stmt).leadingKeyword {
+            case "BEGIN", "START":
+                inTransaction = true
+            case "COMMIT", "ROLLBACK", "END", "ABORT":
+                inTransaction = false
+            default:
+                break
+            }
+        }
     }
 
     // MARK: - History
