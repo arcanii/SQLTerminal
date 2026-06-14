@@ -24,16 +24,14 @@ Nothing in *Candidates* is committed work — it's a planning list.
 - **Schema sidebar / object browser** — tables → columns tree; click to drop a
   `SELECT` in the editor or preview rows.
 - **Tests** — pure SQL logic (statement splitter, classifier, `pg_hba`
-  formatting) extracted to a `SQLCore` package with a `swift test` suite.
+  formatting, literal scanner) in a `SQLCore` package with a `swift test` suite.
+- **Persistent, searchable query history + snippets** — executed queries persist
+  across launches and windows; named reusable snippets; a searchable toolbar panel.
+- **Sortable result columns + cell detail** — click-to-sort headers (numeric-aware);
+  a cell detail view that expands long text and pretty-prints JSON.
+- **SQL syntax highlighting** — keywords / strings / comments / numbers in the editor.
 
 ## Candidates
-
-### Editor & results UX
-- **Persistent, searchable query history + snippets** (M) — history currently
-  dies with the window.
-- **Sortable result columns + cell detail view** (M) — click-to-sort headers;
-  expand long text / JSON cell values.
-- **SQL syntax highlighting** (M) — in the editor.
 
 ### Foundational
 - **MySQL / MariaDB engine** (M–L) — the `DatabaseProvider` protocol + factory

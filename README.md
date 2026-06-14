@@ -19,6 +19,7 @@ Use command-arrows (⌘↑↓) for history replay.
 
 |Version|Date|Description|
 |-------|----|-----------|
+|1.1.4 | June 14, 2026 | SQL syntax highlighting; persistent searchable query history + snippets; sortable result columns + cell detail (JSON); transparent About logo |
 |1.1.3 | June 14, 2026 | Off-main query execution + cancel; SSL/TLS modes with status-bar lock & connection details; read-only mode; destructive-statement confirmation; run-selection / statement-at-cursor; transaction controls; schema sidebar; `SQLCore` test suite |
 |0.1.2 | June 14, 2026 | Auto-updates (Sparkle); detailed PostgreSQL connection errors & connection UX; selectable output |
 |0.1.1 | March 23, 2026|Initial version - SQLite, Postgres|
@@ -42,12 +43,17 @@ Use command-arrows (⌘↑↓) for history replay.
 - Run the **whole editor** (**⌘E**), just the **selection**, or the **statement under the cursor** (**⌘↩**)
 - Command history with **⌘↑** / **⌘↓**
 - Multi-statement execution (`$$`-aware splitter handles PL/pgSQL bodies)
+- **SQL syntax highlighting** — keywords, strings, comments, and numbers
 - Dot-commands for common operations (`.tables`, `.schema`, `.help`)
 - Syntax-safe input (smart quotes auto-corrected to straight quotes)
 
 ### Schema Browser
 - Collapsible sidebar listing the connection's tables (public schema for Postgres), each expandable to its columns
 - Click a table to drop a `SELECT` into the editor; right-click to preview rows or copy the name
+
+### History & Snippets
+- **Persistent, searchable history** — every query you run is remembered across launches and shared across windows; open the toolbar panel, search, and click to reload one into the editor
+- **Snippets** — save the current query as a named, reusable snippet and insert it later
 
 ### Safety
 - **Read-only mode** — a per-window toggle that blocks writes and DDL before they reach the database
@@ -58,6 +64,8 @@ Use command-arrows (⌘↑↓) for history replay.
 
 ### Results
 - Tabular output with alternating row shading
+- **Sortable columns** — click a header to sort (click again to reverse); numeric-aware
+- **Cell detail view** — right-click a cell → **View value…** to expand long text, with JSON pretty-printing
 - **Select any text** in the output pane, or right-click any row or cell to copy
 - Export full results as **TSV** or **CSV** (paste directly into Excel/Numbers)
 - Horizontal and vertical scrolling for wide/tall result sets
