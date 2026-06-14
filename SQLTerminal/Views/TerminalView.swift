@@ -26,8 +26,8 @@ struct TerminalView: View {
     @EnvironmentObject var vm: TerminalViewModel
     @State private var editorHeight: CGFloat = 150
     /// The editor's current selection/caret, used to run just the selected SQL
-    /// or the statement under the cursor.
-    @State private var selection: TextSelection?
+    /// or the statement under the cursor (UTF-16 range from the editor).
+    @State private var selectedRange = NSRange(location: 0, length: 0)
     /// Whether the schema sidebar is shown.
     @State private var showSidebar = true
     /// Whether the history & snippets sheet is shown.
@@ -220,10 +220,7 @@ struct TerminalView: View {
             .padding(.horizontal, 12)
             .padding(.top, 6)
 
-            TextEditor(text: $vm.sqlText, selection: $selection)
-                .font(.system(.body, design: .monospaced))
-                .scrollContentBackground(.hidden)
-                .autocorrectionDisabled(true)
+            SQLEditorView(text: $vm.sqlText, selectedRange: $selectedRange)
                 .padding(8)
                 .background(
                     RoundedRectangle(cornerRadius: 6)
@@ -232,7 +229,9 @@ struct TerminalView: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
                 .onAppear {
-                    // Disable smart quotes and dashes globally for NSTextView
+                    // SQLEditorView disables smart substitution on its own text
+                    // view; also disable it globally so the connection sheet's
+                    // fields don't mangle quotes/dashes either.
                     UserDefaults.standard.set(false, forKey: "NSAutomaticQuoteSubstitutionEnabled")
                     UserDefaults.standard.set(false, forKey: "NSAutomaticDashSubstitutionEnabled")
                     UserDefaults.standard.set(false, forKey: "NSAutomaticTextReplacementEnabled")
@@ -298,19 +297,28 @@ struct TerminalView: View {
     /// The SQL to run for ⌘↩: the selected text, or the statement under the caret
     /// when nothing is selected. Returns `nil` to fall back to the whole editor.
     private func snippetToRun() -> String? {
-        guard let selection else { return nil }
-        switch selection.indices {
-        case .selection(let range):
-            if range.isEmpty {
-                let offset = vm.sqlText.distance(from: vm.sqlText.startIndex, to: range.lowerBound)
-                return SQLStatementSplitter.statement(atOffset: offset, in: vm.sqlText)
-            }
-            return String(vm.sqlText[range])
-        case .multiSelection(let rangeSet):
-            return rangeSet.ranges.map { String(vm.sqlText[$0]) }.joined(separator: "\n")
-        @unknown default:
-            return nil
+        let ns = vm.sqlText as NSString
+        let bounds = NSRange(location: 0, length: ns.length)
+
+        // A non-empty selection runs verbatim.
+        let selected = NSIntersectionRange(selectedRange, bounds)
+        if selected.length > 0 {
+            return ns.substring(with: selected)
         }
+
+        // Otherwise, the statement under the caret.
+        let caret = min(selectedRange.location, ns.length)
+        let offset = characterOffset(utf16: caret, in: vm.sqlText)
+        return SQLStatementSplitter.statement(atOffset: offset, in: vm.sqlText)
+    }
+
+    /// Convert a UTF-16 offset (from the editor) to a Character offset (what the
+    /// splitter counts in). Identical for ASCII; correct for everything else.
+    private func characterOffset(utf16 offset: Int, in string: String) -> Int {
+        guard let u16 = string.utf16.index(string.utf16.startIndex, offsetBy: offset,
+                                            limitedBy: string.utf16.endIndex),
+              let idx = u16.samePosition(in: string) else { return offset }
+        return string.distance(from: string.startIndex, to: idx)
     }
 
     // MARK: - Clipboard
