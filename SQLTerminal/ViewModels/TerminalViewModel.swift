@@ -32,6 +32,8 @@ final class TerminalViewModel: ObservableObject {
     @Published var isShowingConnectionSheet = true
     @Published var connectionInfo: DatabaseConnection?
     @Published var isConnected = false
+    /// Whether the active connection is encrypted (SSL/TLS) — drives the lock icon.
+    @Published var isSSLActive = false
 
     /// A query is executing on the background session. Drives the spinner and the
     /// Cancel affordance, and gates a second concurrent execution.
@@ -68,11 +70,13 @@ final class TerminalViewModel: ObservableObject {
             try await session.connect(config)
             connectionInfo = config
             isConnected = true
+            isSSLActive = session.isSSLActive
             appendHistory(.system("Connected to \(config.displayName)"))
             return true
         } catch {
             connectionInfo = nil
             isConnected = false
+            isSSLActive = false
             appendHistory(.error(error.localizedDescription))
             return false
         }
@@ -94,6 +98,7 @@ final class TerminalViewModel: ObservableObject {
     /// knows not to reconnect.
     private func teardownConnection() {
         isConnected = false
+        isSSLActive = false
         connectionInfo = nil
         runningTask?.cancel()
         runningTask = nil
@@ -119,6 +124,7 @@ final class TerminalViewModel: ObservableObject {
             try await session.connect(config)
             connectionInfo = config
             isConnected = true
+            isSSLActive = session.isSSLActive
             appendHistory(.system("Switched to database \"\(dbName)\"."))
         } catch {
             // The switch failed (no access, no such database, …). Report a clear
@@ -129,10 +135,12 @@ final class TerminalViewModel: ObservableObject {
                 try await session.connect(previousConfig)
                 connectionInfo = previousConfig
                 isConnected = true
+                isSSLActive = session.isSSLActive
                 appendHistory(.error("\(reason) Still connected to \"\(previousConfig.databaseName)\"."))
             } catch {
                 connectionInfo = nil
                 isConnected = false
+                isSSLActive = false
                 appendHistory(.error("\(reason) The previous connection was also lost — please reconnect."))
             }
         }
@@ -306,9 +314,11 @@ final class TerminalViewModel: ObservableObject {
               config.engine == .postgres else { return }
         do {
             try await session.connect(config)
+            isSSLActive = session.isSSLActive
             appendHistory(.system("Reconnected to \(config.displayName)."))
         } catch {
             isConnected = false
+            isSSLActive = false
             appendHistory(.error("The connection was closed to cancel the query and could not be re-established: \(error.localizedDescription)"))
         }
     }

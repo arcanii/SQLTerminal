@@ -34,6 +34,15 @@ struct StatusBarView: View {
                 .font(.system(.caption, design: .monospaced))
                 .lineLimit(1)
 
+            // A lock appears only when the connection is genuinely encrypted.
+            if vm.isSSLActive {
+                Image(systemName: "lock.fill")
+                    .font(.caption)
+                    .foregroundStyle(.green)
+                    .help("Connection is encrypted with SSL/TLS")
+                    .accessibilityLabel("SSL/TLS encrypted")
+            }
+
             if vm.isRunning || vm.isConnecting {
                 ProgressView()
                     .controlSize(.small)

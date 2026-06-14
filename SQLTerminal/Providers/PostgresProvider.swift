@@ -25,6 +25,7 @@ nonisolated final class PostgresProvider: DatabaseProvider {
 
     let engine: DatabaseEngine = .postgres
     private(set) var isConnected = false
+    private(set) var isSSLActive = false
     private(set) var statusMessage = "Disconnected"
 
     private var connection: Connection?
@@ -53,6 +54,7 @@ nonisolated final class PostgresProvider: DatabaseProvider {
                 }
             }
             isConnected = true
+            isSSLActive = usedSSL
             statusMessage = "Connected to \(config.username)@\(config.host):\(config.port)/\(config.databaseName)\(usedSSL ? " (SSL)" : "")"
         } catch {
             // Could not connect — surface a detailed, actionable message.
@@ -113,6 +115,7 @@ nonisolated final class PostgresProvider: DatabaseProvider {
         connection?.close()
         connection = nil
         isConnected = false
+        isSSLActive = false
         statusMessage = "Disconnected"
     }
 

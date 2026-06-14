@@ -36,6 +36,11 @@ nonisolated protocol DatabaseProvider: AnyObject {
     /// Whether the provider currently has an open connection.
     var isConnected: Bool { get }
 
+    /// Whether the live connection is actually encrypted (SSL/TLS). Reflects what
+    /// was *negotiated*, not the requested mode — a Postgres `.prefer` connection
+    /// that fell back to plaintext reports `false`. Always `false` for SQLite.
+    var isSSLActive: Bool { get }
+
     /// Human-readable status, e.g. "Connected to mydb.sqlite".
     var statusMessage: String { get }
 

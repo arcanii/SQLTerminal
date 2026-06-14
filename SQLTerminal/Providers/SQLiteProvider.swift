@@ -24,6 +24,8 @@ nonisolated final class SQLiteProvider: DatabaseProvider {
 
     let engine: DatabaseEngine = .sqlite
     private(set) var isConnected = false
+    /// SQLite is a local file — there is no network connection to encrypt.
+    let isSSLActive = false
     private(set) var statusMessage = "Disconnected"
     
     private var db: OpaquePointer?

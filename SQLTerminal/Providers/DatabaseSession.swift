@@ -65,6 +65,12 @@ nonisolated final class DatabaseSession: @unchecked Sendable {
         lock.withLock { provider?.isConnected ?? false }
     }
 
+    /// Whether the live connection is encrypted. Read by the owning view model
+    /// right after `connect` returns (when the provider's value is stably set).
+    var isSSLActive: Bool {
+        lock.withLock { provider?.isSSLActive ?? false }
+    }
+
     // MARK: - Connect / disconnect
 
     /// Open a connection for `config`, replacing (and closing) any existing one.
