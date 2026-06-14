@@ -65,6 +65,13 @@ struct StatusBarView: View {
                     .foregroundStyle(.secondary)
             }
 
+            if vm.isReadOnly {
+                Label("Read-only", systemImage: "pencil.slash")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                    .help("Writes are blocked in this window")
+            }
+
             Spacer()
 
             Text("⌘E Execute  ⌘↑ Prev  ⌘↓ Next")

@@ -42,6 +42,14 @@ final class TerminalViewModel: ObservableObject {
     /// in a way that can interrupt a stuck socket, so no Cancel is offered).
     @Published var isConnecting = false
 
+    /// When on, statements the classifier sees as writes/DDL are blocked before
+    /// they reach the database. A per-window guard against prod accidents.
+    @Published var isReadOnly = false
+
+    /// Set when a destructive statement is awaiting the user's confirmation; the
+    /// view presents a dialog bound to this.
+    @Published var pendingConfirmation: PendingConfirmation?
+
     // MARK: - Command history
 
     private var commandHistory: [String] = []
@@ -230,10 +238,10 @@ final class TerminalViewModel: ObservableObject {
         if let dotResult = DotCommandHandler.handle(input, engine: currentEngine) {
             switch dotResult {
             case .sql(let sql):
-                runStatements([sql])
+                guardedRun([sql])
 
             case .multiSQL(let statements):
-                runStatements(statements)
+                guardedRun(statements)
 
             case .reconnect(let dbName):
                 runReconnect(dbName)
@@ -246,8 +254,58 @@ final class TerminalViewModel: ObservableObject {
             }
         } else {
             // Regular SQL — the provider splits multi-statement input itself.
-            runStatements([input])
+            guardedRun([input])
         }
+    }
+
+    /// Apply the read-only block and the destructive-statement confirmation before
+    /// handing `statements` to the executor. Each element is split + classified, so
+    /// this works for both single input and the `.multiSQL` dot-command batch.
+    private func guardedRun(_ statements: [String]) {
+        let infos = statements.flatMap { SQLStatementClassifier.classifyAll($0) }
+
+        // Read-only takes precedence: block the first write outright.
+        if isReadOnly, let write = infos.first(where: { $0.kind == .write }) {
+            appendHistory(.error("Read-only mode is on — \(write.leadingKeyword) is blocked. Toggle it off in the toolbar to run writes."))
+            return
+        }
+
+        // Otherwise, confirm anything destructive before running.
+        let destructive = infos.filter(\.isDestructive)
+        if !destructive.isEmpty {
+            pendingConfirmation = PendingConfirmation(
+                statements: statements,
+                message: destructiveWarning(for: destructive)
+            )
+            return
+        }
+
+        runStatements(statements)
+    }
+
+    /// Proceed with a previously-flagged destructive run.
+    func confirmPendingExecution() {
+        guard let pending = pendingConfirmation else { return }
+        pendingConfirmation = nil
+        runStatements(pending.statements)
+    }
+
+    /// Abandon a flagged destructive run.
+    func cancelPendingExecution() {
+        guard pendingConfirmation != nil else { return }
+        pendingConfirmation = nil
+        appendHistory(.system("Cancelled — destructive statement not run."))
+    }
+
+    private func destructiveWarning(for infos: [SQLStatementInfo]) -> String {
+        let labels = infos.map { info -> String in
+            switch info.leadingKeyword {
+            case "DROP", "TRUNCATE": return info.leadingKeyword
+            default:                 return "\(info.leadingKeyword) without WHERE"
+            }
+        }
+        let unique = Array(NSOrderedSet(array: labels)) as? [String] ?? labels
+        return "This runs a destructive statement that can't be undone: \(unique.joined(separator: ", ")). Run it anyway?"
     }
 
     /// Execute `statements` one at a time on the background session, appending a
@@ -335,6 +393,15 @@ final class TerminalViewModel: ObservableObject {
     private func appendHistory(_ entry: HistoryEntry) {
         history.append(entry)
     }
+}
+
+// MARK: - Pending destructive confirmation
+
+/// A destructive run held back until the user confirms it.
+struct PendingConfirmation: Identifiable {
+    let id = UUID()
+    let statements: [String]
+    let message: String
 }
 
 // MARK: - History entry model

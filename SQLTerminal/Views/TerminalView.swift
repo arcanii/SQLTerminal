@@ -71,8 +71,29 @@ struct TerminalView: View {
             ConnectionSheet()
                 .interactiveDismissDisabled()
         }
+        .confirmationDialog(
+            "Run destructive statement?",
+            isPresented: Binding(
+                get: { vm.pendingConfirmation != nil },
+                set: { if !$0 { vm.cancelPendingExecution() } }
+            ),
+            presenting: vm.pendingConfirmation
+        ) { _ in
+            Button("Run anyway", role: .destructive) { vm.confirmPendingExecution() }
+            Button("Cancel", role: .cancel) { vm.cancelPendingExecution() }
+        } message: { pending in
+            Text(pending.message)
+        }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
+                Toggle(isOn: $vm.isReadOnly) {
+                    Label("Read-only", systemImage: "pencil.slash")
+                }
+                .toggleStyle(.button)
+                .help(vm.isReadOnly
+                      ? "Read-only mode is ON — write/DDL statements are blocked"
+                      : "Read-only mode is OFF — click to block writes")
+
                 if vm.isRunning {
                     ProgressView()
                         .controlSize(.small)
