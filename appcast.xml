@@ -9,6 +9,30 @@
         <language>en</language>
 
         <item>
+            <title>v1.1.3</title>
+            <pubDate>Sun, 14 Jun 2026 09:44:51 +0000</pubDate>
+            <sparkle:version>3</sparkle:version>
+            <sparkle:shortVersionString>1.1.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.2</sparkle:minimumSystemVersion>
+            <link>https://github.com/arcanii/SQLTerminal/releases/tag/v1.1.3</link>
+            <description><![CDATA[
+                <h2>SQLTerminal 1.1.3</h2>
+                <ul>
+                    <li><b>Responsive UI</b> — queries run off the main thread, so a slow or network query no longer freezes the app; cancel a running query with <b>⌘.</b></li>
+                    <li><b>PostgreSQL SSL/TLS</b> (Off / Prefer / Require) with a status-bar lock when the connection is encrypted, plus a click-through connection-details popover.</li>
+                    <li><b>Schema sidebar</b> — browse tables and columns; click a table to insert a <code>SELECT</code>.</li>
+                    <li><b>Run selection</b>, or the statement under the cursor, with <b>⌘↩</b>.</li>
+                    <li><b>Safety</b> — read-only mode, and confirmation before <code>DROP</code> / <code>TRUNCATE</code> / <code>WHERE</code>-less <code>DELETE</code>/<code>UPDATE</code>.</li>
+                    <li><b>Transactions</b> — Begin / Commit / Rollback from the toolbar.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+                url="https://github.com/arcanii/SQLTerminal/releases/download/v1.1.3/SQLTerminal-v1.1.3.dmg"
+                sparkle:edSignature="rYuuK6Tma72XOQ8M2540jYnXBBddeLVsbY0ig/jCTEfnUPs2cEqhd9rhO/7RyqinSJD+hCyi3usCRFpkoS+aBw==" length="4227474"
+                type="application/octet-stream"/>
+        </item>
+
+        <item>
             <title>v0.1.2</title>
             <pubDate>Sun, 14 Jun 2026 00:00:00 +0000</pubDate>
             <sparkle:version>2</sparkle:version>
