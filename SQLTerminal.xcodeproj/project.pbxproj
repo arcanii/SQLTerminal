@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		93B1B93D2F6E9481003D42E2 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 93B1B93C2F6E9481003D42E2 /* libsqlite3.tbd */; };
 		93B1B9722F6EDB3B003D42E2 /* PostgresClientKit in Frameworks */ = {isa = PBXBuildFile; productRef = 93B1B9712F6EDB3B003D42E2 /* PostgresClientKit */; };
+		AAAA0001000000000000B001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = AAAA0001000000000000B002 /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -30,6 +31,7 @@
 			files = (
 				93B1B93D2F6E9481003D42E2 /* libsqlite3.tbd in Frameworks */,
 				93B1B9722F6EDB3B003D42E2 /* PostgresClientKit in Frameworks */,
+				AAAA0001000000000000B001 /* Sparkle in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -79,6 +81,7 @@
 			name = SQLTerminal;
 			packageProductDependencies = (
 				93B1B9712F6EDB3B003D42E2 /* PostgresClientKit */,
+				AAAA0001000000000000B002 /* Sparkle */,
 			);
 			productName = SQLTerminal;
 			productReference = 93B1B8DD2F6E70B7003D42E2 /* SQLTerminal.app */;
@@ -110,6 +113,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				93B1B9702F6EDB3B003D42E2 /* XCRemoteSwiftPackageReference "PostgresClientKit" */,
+				AAAA0001000000000000B003 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 100;
 			productRefGroup = 93B1B8DE2F6E70B7003D42E2 /* Products */;
@@ -278,10 +282,14 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = SQLTerminal;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_SUEnableAutomaticChecks = YES;
+				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/arcanii/SQLTerminal/main/appcast.xml";
+				INFOPLIST_KEY_SUPublicEDKey = "sKPprIa95Hw+DX3bMoxWMsyC0w9vc4MzEpgx7TBDP1I=";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -316,10 +324,14 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = SQLTerminal;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_SUEnableAutomaticChecks = YES;
+				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/arcanii/SQLTerminal/main/appcast.xml";
+				INFOPLIST_KEY_SUPublicEDKey = "sKPprIa95Hw+DX3bMoxWMsyC0w9vc4MzEpgx7TBDP1I=";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -369,6 +381,14 @@
 				minimumVersion = 1.0.0;
 			};
 		};
+		AAAA0001000000000000B003 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -376,6 +396,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 93B1B9702F6EDB3B003D42E2 /* XCRemoteSwiftPackageReference "PostgresClientKit" */;
 			productName = PostgresClientKit;
+		};
+		AAAA0001000000000000B002 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AAAA0001000000000000B003 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

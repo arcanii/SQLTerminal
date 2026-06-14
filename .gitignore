@@ -60,3 +60,9 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# SQLTerminal release artifacts
+build/
+*.xcarchive
+scripts/build.config
+*.dmg

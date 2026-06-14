@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0"
+     xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
+     xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel>
+        <title>SQLTerminal</title>
+        <link>https://github.com/arcanii/SQLTerminal</link>
+        <description>Updates for SQLTerminal — a native macOS SQL terminal.</description>
+        <language>en</language>
+
+        <!--
+          Sparkle reads this feed from the SUFeedURL set in the app's Info.plist:
+          https://raw.githubusercontent.com/arcanii/SQLTerminal/main/appcast.xml
+
+          Each release adds one <item> at the TOP of the channel. scripts/build.sh
+          prints the ready-to-paste <enclosure> line (with sparkle:edSignature and
+          length) after it signs the DMG. Fill in the version/date/notes, paste the
+          enclosure, then commit and push this file to main.
+
+        <item>
+            <title>v0.1.2</title>
+            <pubDate>Sat, 14 Jun 2026 00:00:00 +0000</pubDate>
+            <sparkle:version>2</sparkle:version>
+            <sparkle:shortVersionString>0.1.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.2</sparkle:minimumSystemVersion>
+            <link>https://github.com/arcanii/SQLTerminal/releases/tag/v0.1.2</link>
+            <description><![CDATA[
+                <h2>SQLTerminal 0.1.2</h2>
+                <ul>
+                    <li>Describe the changes here.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+                url="https://github.com/arcanii/SQLTerminal/releases/download/v0.1.2/SQLTerminal-v0.1.2.dmg"
+                sparkle:edSignature="PASTE_edSignature_FROM_sign_update"
+                length="PASTE_length_FROM_sign_update"
+                type="application/octet-stream"/>
+        </item>
+        -->
+    </channel>
+</rss>

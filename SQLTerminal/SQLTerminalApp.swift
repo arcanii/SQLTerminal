@@ -20,10 +20,19 @@
 
 import SwiftUI
 import AppKit
+import Sparkle
 
 @main
 struct SQLTerminalApp: App {
     @State private var monitorInstalled = false
+
+    /// Sparkle auto-updater, created once for the app's lifetime. `startingUpdater: true`
+    /// schedules background checks per the SU* keys in Info.plist.
+    private let updaterController = SPUStandardUpdaterController(
+        startingUpdater: true,
+        updaterDelegate: nil,
+        userDriverDelegate: nil
+    )
 
     var body: some Scene {
         WindowGroup {
@@ -58,6 +67,11 @@ struct SQLTerminalApp: App {
                         openAboutWindow()
                     }
                 }
+            }
+
+            // "Check for Updates…" right under the About item.
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesView(updater: updaterController.updater)
             }
         }
     }

@@ -1,0 +1,18 @@
+# Copy to scripts/build.config (gitignored) and adjust for your machine.
+# Any value here overrides the default in build.sh.
+
+# Apple Developer Team that owns the Developer ID Application certificate.
+# DEVELOPMENT_TEAM="386M76FV3K"
+
+# notarytool keychain profile created once via:
+#   xcrun notarytool store-credentials "SQLTerminal-notarize" \
+#       --apple-id you@example.com --team-id 386M76FV3K --password <app-specific-password>
+# NOTARY_PROFILE="SQLTerminal-notarize"
+
+# Keychain account holding the Sparkle EdDSA private key (created with
+# generate_keys --account SQLTerminal). Back the key up — losing it means you
+# can never sign another update for existing installs.
+# SPARKLE_KEY_ACCOUNT="SQLTerminal"
+
+# Optional: explicit path to Sparkle's sign_update (otherwise auto-found in DerivedData).
+# SIGN_UPDATE="/path/to/sign_update"
