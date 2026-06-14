@@ -40,6 +40,11 @@ struct TerminalView: View {
                             }
                         }
                         .padding()
+                        // Let the user click-drag to select text anywhere in the
+                        // output pane. Applied here, it propagates through the
+                        // environment to every Text below — history rows and the
+                        // result-table cells alike.
+                        .textSelection(.enabled)
                     }
                     .onChange(of: vm.history.count) { _, _ in
                         withAnimation {

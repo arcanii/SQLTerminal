@@ -196,10 +196,15 @@ struct DotCommandHandler {
         // ── Connection ──
 
         case ".connect", ".use":
-            if let dbName = argument {
-                return .reconnect(dbName)
+            switch engine {
+            case .sqlite:
+                return .message("\(command) is only available for PostgreSQL.")
+            case .postgres:
+                if let dbName = argument {
+                    return .reconnect(dbName)
+                }
+                return .message("Usage: \(command) <database_name>")
             }
-            return .message("Usage: .connect <database_name>")
 
 
         // ── SQLite specific ──

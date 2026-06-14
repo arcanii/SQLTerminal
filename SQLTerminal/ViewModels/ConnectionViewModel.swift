@@ -101,6 +101,14 @@ final class ConnectionViewModel: ObservableObject {
         // Never save password — user re-enters it each time
     }
 
+    /// Persist just the engine choice immediately. `saveLastConnection()` only
+    /// runs after a *successful* connect, so without this a failed PostgreSQL
+    /// attempt would leave the sheet reopening on SQLite. Calling this on every
+    /// engine change makes the sheet reopen to whatever engine you last picked.
+    func rememberEngine() {
+        UserDefaults.standard.set(connection.engine.rawValue, forKey: Keys.engine)
+    }
+
     private func loadLastConnection() {
         let defaults = UserDefaults.standard
 

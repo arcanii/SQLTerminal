@@ -78,45 +78,57 @@ final class TerminalViewModel: ObservableObject {
     }
     
     func reconnectToDatabase(_ dbName: String) {
-        guard var config = connectionInfo else {
+        guard let previousConfig = connectionInfo else {
             appendHistory(.error("No active connection to switch from."))
             return
         }
 
-        // Disconnect current
+        // Postgres binds a connection to one database, so switching means a fresh
+        // connection — but reusing the current session's credentials, so there's
+        // no re-prompt. Quietly tear down the current one first.
         provider?.disconnect()
         provider = nil
         isConnected = false
 
-        appendHistory(.system("Switching to database: \(dbName)..."))
-
-        // Update the database name
+        var config = previousConfig
         config.databaseName = dbName
 
-        // Reconnect
         let newProvider = DatabaseProviderFactory.provider(for: config.engine)
         do {
             try newProvider.connect(with: config)
             self.provider = newProvider
             self.connectionInfo = config
             self.isConnected = true
-            appendHistory(.system("Connected to \(config.displayName)"))
+            appendHistory(.system("Switched to database \"\(dbName)\"."))
         } catch {
-            appendHistory(.error("Failed to connect to \(dbName): \(error.localizedDescription)"))
-            // Try to reconnect to the old database
-            if let oldConfig = connectionInfo {
-                appendHistory(.system("Attempting to reconnect to previous database..."))
-                let fallback = DatabaseProviderFactory.provider(for: oldConfig.engine)
-                do {
-                    try fallback.connect(with: oldConfig)
-                    self.provider = fallback
-                    self.isConnected = true
-                    appendHistory(.system("Reconnected to \(oldConfig.displayName)"))
-                } catch {
-                    appendHistory(.error("Could not reconnect: \(error.localizedDescription)"))
-                }
+            // The switch failed (no access, no such database, …). Report a clear
+            // reason and quietly restore the previous database — no reconnect
+            // chatter.
+            let reason = friendlySwitchError(error, database: dbName)
+            let fallback = DatabaseProviderFactory.provider(for: previousConfig.engine)
+            if (try? fallback.connect(with: previousConfig)) != nil {
+                self.provider = fallback
+                self.connectionInfo = previousConfig
+                self.isConnected = true
+                appendHistory(.error("\(reason) Still connected to \"\(previousConfig.databaseName)\"."))
+            } else {
+                appendHistory(.error("\(reason) The previous connection was also lost — please reconnect."))
             }
         }
+    }
+
+    /// Maps a failed database switch to a clear, human-readable reason. Matches
+    /// on the SQLSTATE code (which Postgres does not localize) with the English
+    /// message text as a fallback.
+    private func friendlySwitchError(_ error: Error, database: String) -> String {
+        let detail = error.localizedDescription
+        if detail.contains("42501") || detail.localizedCaseInsensitiveContains("permission denied for database") {
+            return "You don't have access to database \"\(database)\"."
+        }
+        if detail.contains("3D000") || detail.localizedCaseInsensitiveContains("does not exist") {
+            return "Database \"\(database)\" does not exist."
+        }
+        return "Couldn't switch to \"\(database)\": \(detail)"
     }
 
 

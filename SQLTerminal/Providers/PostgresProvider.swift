@@ -66,14 +66,27 @@ final class PostgresProvider: DatabaseProvider {
             } catch {
                 lastError = error
                 connection = nil
-                // Continue trying next method
+
+                // The auth-method loop exists only to discover which credential
+                // *type* the server wants. Any other failure — the server
+                // rejected us (wrong password, no pg_hba.conf entry), the host is
+                // unreachable, an SSL problem — will not be fixed by trying a
+                // different credential, so stop now and report the real reason
+                // instead of masking it with the final (Trust) attempt's error.
+                if !Self.isCredentialTypeMismatch(error) {
+                    break
+                }
             }
         }
 
-        // All methods failed
+        // Could not connect — surface a detailed, actionable message.
         disconnect()
         throw PostgresError.connectionFailed(
-            lastError?.localizedDescription ?? "All authentication methods failed"
+            Self.describeConnectionError(lastError,
+                                         host: config.host,
+                                         port: pgConfig.port,
+                                         database: config.databaseName,
+                                         user: config.username)
         )
     }
 
@@ -351,6 +364,142 @@ final class PostgresProvider: DatabaseProvider {
         return statements
     }
 
+    // MARK: - Error formatting
+
+    /// True only for the "you offered the wrong credential type" errors — the
+    /// signal that another method in `authMethods` is worth trying. Every other
+    /// error is terminal and should be reported to the user as-is.
+    private static func isCredentialTypeMismatch(_ error: Error) -> Bool {
+        guard let pg = error as? PostgresClientKit.PostgresError else { return false }
+        switch pg {
+        case .scramSHA256CredentialRequired,
+             .md5PasswordCredentialRequired,
+             .cleartextPasswordCredentialRequired,
+             .trustCredentialRequired:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Turns a connection failure into a message the user can act on.
+    ///
+    /// PostgresClientKit's `PostgresError` is a bare `enum: Error` with no
+    /// `LocalizedError`/`CustomStringConvertible` conformance, so
+    /// `error.localizedDescription` yields a useless "The operation couldn't be
+    /// completed…" string. The real information lives in the associated values —
+    /// most importantly the server's own `Notice` (e.g. "no pg_hba.conf entry
+    /// for host …" or "password authentication failed for user …").
+    private static func describeConnectionError(_ error: Error?,
+                                                host: String,
+                                                port: Int,
+                                                database: String,
+                                                user: String) -> String {
+        guard let error = error else {
+            return "Could not connect to \(host):\(port)."
+        }
+
+        guard let pg = error as? PostgresClientKit.PostgresError else {
+            // Some lower-level error — its own description still beats
+            // localizedDescription.
+            return String(describing: error)
+        }
+
+        switch pg {
+        case .sqlError(let notice):
+            // The server's own words.
+            let serverMessage = notice.message ?? "The server rejected the connection."
+            var msg = serverMessage
+            if let severity = notice.severity { msg = "\(severity): \(msg)" }
+            if let detail = notice.detail { msg += "\nDetail: \(detail)" }
+            if let hint = notice.hint { msg += "\nHint: \(hint)" }
+            // For a "no pg_hba.conf entry" rejection, show the exact line the
+            // server's admin would add to let this connection in.
+            if let hbaLine = Self.suggestedHBALine(fromServerMessage: serverMessage) {
+                msg += "\n\nThe server has no pg_hba.conf rule that permits this login. Add a line like this on the server, then reload it (SELECT pg_reload_conf();):\n\n    \(hbaLine)"
+            }
+            if let code = notice.code { msg += "\n(SQLSTATE \(code))" }
+            return msg
+
+        case .socketError(let cause):
+            return "Could not reach \(host):\(port) — \(String(describing: cause))"
+
+        case .sslError(let cause):
+            return "SSL/TLS error connecting to \(host):\(port) — \(String(describing: cause))"
+
+        case .sslNotSupported:
+            return "The server at \(host):\(port) does not support SSL."
+
+        case .serverError(let description):
+            return "Server error from \(host):\(port) — \(description)"
+
+        case .scramSHA256CredentialRequired,
+             .md5PasswordCredentialRequired,
+             .cleartextPasswordCredentialRequired,
+             .trustCredentialRequired:
+            // Exhausted every credential type — almost always a wrong
+            // username/password.
+            return "Authentication failed for user \"\(user)\" on database \"\(database)\" at \(host):\(port). Check the username and password."
+
+        case .unsupportedAuthenticationType(let authenticationType):
+            return "The server at \(host):\(port) requires an authentication type SQLTerminal does not support: \(authenticationType)."
+
+        case .invalidUsernameString:
+            return "The username \"\(user)\" is not valid for SCRAM authentication."
+
+        case .invalidPasswordString:
+            return "The password is not valid for SCRAM authentication."
+
+        default:
+            return String(describing: pg)
+        }
+    }
+
+    /// If `message` is a Postgres "no pg_hba.conf entry for host …" rejection,
+    /// returns the pg_hba.conf line that would permit the connection. Postgres
+    /// phrases the rejection as:
+    ///
+    ///     no pg_hba.conf entry for host "ADDR", user "USER", database "DB", no encryption
+    ///
+    /// so the three quoted values are exactly the fields a `host` rule needs.
+    private static func suggestedHBALine(fromServerMessage message: String) -> String? {
+        guard message.contains("no pg_hba.conf entry") else { return nil }
+
+        let quoted = quotedValues(in: message)
+        guard quoted.count >= 3 else { return nil }
+
+        let rawAddress = quoted[0]
+        let user = quoted[1]
+        let database = quoted[2]
+
+        // Strip any IPv6 zone index (e.g. "%en0") — it isn't valid in pg_hba.conf.
+        let address = String(rawAddress.split(separator: "%").first ?? Substring(rawAddress))
+
+        // This client always connects over TCP, so we expect an IP literal; if
+        // it isn't one, don't risk suggesting a malformed rule.
+        guard address.contains(".") || address.contains(":") else { return nil }
+
+        // Single-host CIDR: /32 for IPv4, /128 for IPv6.
+        let cidr = address.contains(":") ? "\(address)/128" : "\(address)/32"
+
+        return "host    \(database)    \(user)    \(cidr)    scram-sha-256"
+    }
+
+    /// The substrings enclosed in double quotes, in order of appearance.
+    private static func quotedValues(in string: String) -> [String] {
+        var values: [String] = []
+        var current = ""
+        var inQuote = false
+        for ch in string {
+            if ch == "\"" {
+                if inQuote { values.append(current); current = "" }
+                inQuote.toggle()
+            } else if inQuote {
+                current.append(ch)
+            }
+        }
+        return values
+    }
 
 }
 

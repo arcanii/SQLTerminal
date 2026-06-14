@@ -75,7 +75,10 @@ struct ConnectionSheet: View {
             }
             .padding()
         }
-        .frame(width: 520, height: 380)
+        // SQLite needs one field; PostgreSQL needs six. Size the sheet to the
+        // engine so every field — including Username/Password — is visible at
+        // once instead of hidden below the fold in a scrolling form.
+        .frame(width: 520, height: vm.connection.engine == .sqlite ? 380 : 560)
     }
 
     // MARK: - Sub-views
@@ -105,6 +108,9 @@ struct ConnectionSheet: View {
         .onChange(of: vm.connection.engine) { _, newValue in
             vm.connection.port = newValue.defaultPort
             vm.errorMessage = nil
+            // Remember the engine even if the user never completes a connection,
+            // so the sheet reopens to the engine they last picked.
+            vm.rememberEngine()
         }
     }
 
