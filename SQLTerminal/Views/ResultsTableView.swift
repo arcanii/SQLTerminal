@@ -1,7 +1,7 @@
 /*
  SQLTerminal - a simple dev tool to connect to {sqlite3, postgres} and run sql commands
      Copyright (C) 2026 bryan.mark@gmail.com
- 
+
      This program is free software: you can redistribute it and/or modify
      it under the terms of the GNU General Public License as published by
      the Free Software Foundation, either version 3 of the License, or
@@ -24,6 +24,14 @@ import AppKit
 
 struct ResultsTableView: View {
     let result: QueryResult
+
+    /// Index of the column the rows are sorted by, and the direction.
+    @State private var sortColumn: Int?
+    @State private var sortAscending = true
+    /// The cell currently shown in the detail sheet, if any.
+    @State private var cellDetail: CellDetail?
+
+    private let columnWidth: CGFloat = 120
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -55,48 +63,56 @@ struct ResultsTableView: View {
                 // Table with both scrollbars
                 ScrollView([.horizontal, .vertical], showsIndicators: true) {
                     VStack(alignment: .leading, spacing: 0) {
-                        // Header
+                        // Header — click to sort
                         HStack(spacing: 0) {
-                            ForEach(result.columns, id: \.self) { col in
-                                Text(col)
-                                    .font(.system(.caption, design: .monospaced))
-                                    .bold()
-                                    .frame(minWidth: 120, alignment: .leading)
+                            ForEach(Array(result.columns.enumerated()), id: \.offset) { idx, col in
+                                Button {
+                                    toggleSort(idx)
+                                } label: {
+                                    HStack(spacing: 3) {
+                                        Text(col)
+                                            .font(.system(.caption, design: .monospaced))
+                                            .bold()
+                                        if sortColumn == idx {
+                                            Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
+                                                .font(.system(size: 8, weight: .bold))
+                                        }
+                                        Spacer(minLength: 0)
+                                    }
+                                    .frame(minWidth: columnWidth, alignment: .leading)
                                     .padding(.vertical, 4)
                                     .padding(.horizontal, 8)
                                     .background(Color.accentColor.opacity(0.12))
-                            }
-                        }
-                        .contextMenu {
-                            Button("Copy Header Row") {
-                                copyToClipboard(result.columns.joined(separator: "\t"))
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .help("Sort by \(col)")
                             }
                         }
 
                         Divider()
 
                         // Rows
-                        ForEach(Array(result.rows.enumerated()), id: \.offset) { rowIdx, row in
+                        ForEach(Array(displayRows.enumerated()), id: \.offset) { rowIdx, row in
                             HStack(spacing: 0) {
-                                ForEach(Array(row.enumerated()), id: \.offset) { _, value in
+                                ForEach(Array(row.enumerated()), id: \.offset) { colIdx, value in
                                     Text(value)
                                         .font(.system(.caption, design: .monospaced))
-                                        .frame(minWidth: 120, alignment: .leading)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                        .frame(minWidth: columnWidth, alignment: .leading)
                                         .padding(.vertical, 3)
                                         .padding(.horizontal, 8)
+                                        .contextMenu {
+                                            Button("View value…") {
+                                                cellDetail = CellDetail(column: columnName(colIdx), value: value)
+                                            }
+                                            Button("Copy value") { copyToClipboard(value) }
+                                            Button("Copy row") { copyToClipboard(row.joined(separator: "\t")) }
+                                        }
                                 }
                             }
                             .background(rowIdx % 2 == 0 ? Color.clear : Color.gray.opacity(0.06))
-                            .contextMenu {
-                                Button("Copy Row") {
-                                    copyToClipboard(row.joined(separator: "\t"))
-                                }
-                                ForEach(Array(zip(result.columns, row).enumerated()), id: \.offset) { _, pair in
-                                    Button("Copy \(pair.0): \(pair.1.prefix(30))") {
-                                        copyToClipboard(pair.1)
-                                    }
-                                }
-                            }
                         }
                     }
                 }
@@ -120,6 +136,50 @@ struct ResultsTableView: View {
             .font(.system(.caption2, design: .monospaced))
             .foregroundStyle(.secondary)
         }
+        .sheet(item: $cellDetail) { detail in
+            CellDetailView(detail: detail)
+        }
+    }
+
+    // MARK: - Sorting
+
+    /// Rows in the current sort order (or original order when unsorted).
+    private var displayRows: [[String]] {
+        guard let col = sortColumn else { return result.rows }
+        return result.rows.enumerated().sorted { lhs, rhs in
+            let cmp = Self.smartCompare(value(lhs.element, col), value(rhs.element, col))
+            if cmp == .orderedSame { return lhs.offset < rhs.offset }   // stable
+            return sortAscending ? (cmp == .orderedAscending) : (cmp == .orderedDescending)
+        }.map(\.element)
+    }
+
+    private func toggleSort(_ col: Int) {
+        if sortColumn == col {
+            sortAscending.toggle()
+        } else {
+            sortColumn = col
+            sortAscending = true
+        }
+    }
+
+    private func value(_ row: [String], _ col: Int) -> String {
+        row.indices.contains(col) ? row[col] : ""
+    }
+
+    private func columnName(_ col: Int) -> String {
+        result.columns.indices.contains(col) ? result.columns[col] : "col\(col)"
+    }
+
+    /// Compare numerically when both values are numbers, naturally otherwise;
+    /// NULLs sort after everything else.
+    static func smartCompare(_ a: String, _ b: String) -> ComparisonResult {
+        if a == b { return .orderedSame }
+        if a == "NULL" { return .orderedDescending }
+        if b == "NULL" { return .orderedAscending }
+        if let da = Double(a), let db = Double(b) {
+            return da == db ? .orderedSame : (da < db ? .orderedAscending : .orderedDescending)
+        }
+        return a.localizedStandardCompare(b)
     }
 
     // MARK: - Copy helpers
@@ -133,7 +193,7 @@ struct ResultsTableView: View {
     private func copyAsTab() {
         var lines: [String] = []
         lines.append(result.columns.joined(separator: "\t"))
-        for row in result.rows {
+        for row in displayRows {
             lines.append(row.joined(separator: "\t"))
         }
         copyToClipboard(lines.joined(separator: "\n"))
@@ -142,7 +202,7 @@ struct ResultsTableView: View {
     private func copyAsCSV() {
         var lines: [String] = []
         lines.append(result.columns.map { csvEscape($0) }.joined(separator: ","))
-        for row in result.rows {
+        for row in displayRows {
             lines.append(row.map { csvEscape($0) }.joined(separator: ","))
         }
         copyToClipboard(lines.joined(separator: "\n"))
@@ -153,5 +213,78 @@ struct ResultsTableView: View {
             return "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
         }
         return value
+    }
+}
+
+// MARK: - Cell detail
+
+/// A single cell's value, shown in the detail sheet.
+struct CellDetail: Identifiable {
+    let id = UUID()
+    let column: String
+    let value: String
+}
+
+/// Expands a single cell value — handy for long text or JSON. Offers a
+/// pretty-print toggle when the value is valid JSON.
+private struct CellDetailView: View {
+    let detail: CellDetail
+    @Environment(\.dismiss) private var dismiss
+    @State private var prettyJSON = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(detail.column)
+                    .font(.headline)
+                Spacer()
+                if prettyValue != nil {
+                    Toggle("Format JSON", isOn: $prettyJSON)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                }
+            }
+
+            ScrollView {
+                Text(shownValue)
+                    .font(.system(.body, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+            }
+            .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .textBackgroundColor)))
+
+            HStack {
+                Text("\(detail.value.count) characters")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Copy") { copy(shownValue) }
+                Button("Close") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+        }
+        .padding(16)
+        .frame(width: 540, height: 440)
+    }
+
+    private var shownValue: String {
+        (prettyJSON ? prettyValue : nil) ?? detail.value
+    }
+
+    /// The value pretty-printed, if it is valid JSON; otherwise nil.
+    private var prettyValue: String? {
+        guard let data = detail.value.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data),
+              let pretty = try? JSONSerialization.data(withJSONObject: obj,
+                                                       options: [.prettyPrinted, .sortedKeys]),
+              let string = String(data: pretty, encoding: .utf8)
+        else { return nil }
+        return string
+    }
+
+    private func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 }
