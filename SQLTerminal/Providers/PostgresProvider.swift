@@ -146,7 +146,7 @@ nonisolated final class PostgresProvider: DatabaseProvider {
         }
 
         // Split into individual statements, respecting $$ blocks
-        let statements = splitStatements(trimmed)
+        let statements = SQLStatementSplitter.split(trimmed)
 
         let start = CFAbsoluteTimeGetCurrent()
 
@@ -264,140 +264,6 @@ nonisolated final class PostgresProvider: DatabaseProvider {
         }
     }
 
-    // MARK: - Statement splitter (respects $$ dollar-quoted blocks)
-
-    private func splitStatements(_ sql: String) -> [String] {
-        var statements: [String] = []
-        var current = ""
-        var inDollarQuote = false
-        var dollarTag = ""
-        var inSingleQuote = false
-        var inLineComment = false
-        var inBlockComment = false
-        let chars = Array(sql)
-        var i = 0
-
-        while i < chars.count {
-            let c = chars[i]
-            let next: Character? = (i + 1 < chars.count) ? chars[i + 1] : nil
-
-            // Line comment
-            if !inSingleQuote && !inDollarQuote && !inBlockComment
-                && c == "-" && next == "-" {
-                inLineComment = true
-                current.append(c)
-                i += 1
-                continue
-            }
-            if inLineComment {
-                current.append(c)
-                if c == "\n" { inLineComment = false }
-                i += 1
-                continue
-            }
-
-            // Block comment
-            if !inSingleQuote && !inDollarQuote && !inBlockComment
-                && c == "/" && next == "*" {
-                inBlockComment = true
-                current.append(c)
-                i += 1
-                continue
-            }
-            if inBlockComment {
-                current.append(c)
-                if c == "*" && next == "/" {
-                    current.append(next!)
-                    inBlockComment = false
-                    i += 2
-                    continue
-                }
-                i += 1
-                continue
-            }
-
-            // Dollar quoting: $tag$ ... $tag$
-            if !inSingleQuote && c == "$" {
-                // Find the tag
-                var tag = "$"
-                var j = i + 1
-                while j < chars.count && (chars[j].isLetter || chars[j].isNumber || chars[j] == "_") {
-                    tag.append(chars[j])
-                    j += 1
-                }
-                if j < chars.count && chars[j] == "$" {
-                    tag.append("$")
-                    if inDollarQuote && tag == dollarTag {
-                        // End of dollar quote
-                        current.append(tag)
-                        inDollarQuote = false
-                        dollarTag = ""
-                        i = j + 1
-                        continue
-                    } else if !inDollarQuote {
-                        // Start of dollar quote
-                        inDollarQuote = true
-                        dollarTag = tag
-                        current.append(tag)
-                        i = j + 1
-                        continue
-                    }
-                }
-            }
-
-            if inDollarQuote {
-                current.append(c)
-                i += 1
-                continue
-            }
-
-            // Single quotes
-            if c == "'" && !inDollarQuote {
-                inSingleQuote = !inSingleQuote
-                // Handle escaped single quotes ''
-                if inSingleQuote == false && next == "'" {
-                    current.append(c)
-                    current.append(next!)
-                    inSingleQuote = true
-                    i += 2
-                    continue
-                }
-                current.append(c)
-                i += 1
-                continue
-            }
-
-            if inSingleQuote {
-                current.append(c)
-                i += 1
-                continue
-            }
-
-            // Semicolon — statement boundary
-            if c == ";" {
-                current.append(c)
-                let trimmed = current.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty {
-                    statements.append(trimmed)
-                }
-                current = ""
-                i += 1
-                continue
-            }
-
-            current.append(c)
-            i += 1
-        }
-
-        // Remaining
-        let trimmed = current.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty {
-            statements.append(trimmed)
-        }
-
-        return statements
-    }
-
     // MARK: - Error formatting
 
     /// True only for the "you offered the wrong credential type" errors — the
@@ -449,7 +315,7 @@ nonisolated final class PostgresProvider: DatabaseProvider {
             if let hint = notice.hint { msg += "\nHint: \(hint)" }
             // For a "no pg_hba.conf entry" rejection, show the exact line the
             // server's admin would add to let this connection in.
-            if let hbaLine = Self.suggestedHBALine(fromServerMessage: serverMessage) {
+            if let hbaLine = PostgresHBA.suggestedLine(fromServerMessage: serverMessage) {
                 msg += "\n\nThe server has no pg_hba.conf rule that permits this login. Add a line like this on the server, then reload it (SELECT pg_reload_conf();):\n\n    \(hbaLine)"
             }
             if let code = notice.code { msg += "\n(SQLSTATE \(code))" }
@@ -487,52 +353,6 @@ nonisolated final class PostgresProvider: DatabaseProvider {
         default:
             return String(describing: pg)
         }
-    }
-
-    /// If `message` is a Postgres "no pg_hba.conf entry for host …" rejection,
-    /// returns the pg_hba.conf line that would permit the connection. Postgres
-    /// phrases the rejection as:
-    ///
-    ///     no pg_hba.conf entry for host "ADDR", user "USER", database "DB", no encryption
-    ///
-    /// so the three quoted values are exactly the fields a `host` rule needs.
-    private static func suggestedHBALine(fromServerMessage message: String) -> String? {
-        guard message.contains("no pg_hba.conf entry") else { return nil }
-
-        let quoted = quotedValues(in: message)
-        guard quoted.count >= 3 else { return nil }
-
-        let rawAddress = quoted[0]
-        let user = quoted[1]
-        let database = quoted[2]
-
-        // Strip any IPv6 zone index (e.g. "%en0") — it isn't valid in pg_hba.conf.
-        let address = String(rawAddress.split(separator: "%").first ?? Substring(rawAddress))
-
-        // This client always connects over TCP, so we expect an IP literal; if
-        // it isn't one, don't risk suggesting a malformed rule.
-        guard address.contains(".") || address.contains(":") else { return nil }
-
-        // Single-host CIDR: /32 for IPv4, /128 for IPv6.
-        let cidr = address.contains(":") ? "\(address)/128" : "\(address)/32"
-
-        return "host    \(database)    \(user)    \(cidr)    scram-sha-256"
-    }
-
-    /// The substrings enclosed in double quotes, in order of appearance.
-    private static func quotedValues(in string: String) -> [String] {
-        var values: [String] = []
-        var current = ""
-        var inQuote = false
-        for ch in string {
-            if ch == "\"" {
-                if inQuote { values.append(current); current = "" }
-                inQuote.toggle()
-            } else if inQuote {
-                current.append(ch)
-            }
-        }
-        return values
     }
 
 }
