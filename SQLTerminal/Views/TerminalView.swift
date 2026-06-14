@@ -30,6 +30,8 @@ struct TerminalView: View {
     @State private var selection: TextSelection?
     /// Whether the schema sidebar is shown.
     @State private var showSidebar = true
+    /// Whether the history & snippets sheet is shown.
+    @State private var showHistory = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -43,6 +45,10 @@ struct TerminalView: View {
         .sheet(isPresented: $vm.isShowingConnectionSheet) {
             ConnectionSheet()
                 .interactiveDismissDisabled()
+        }
+        .sheet(isPresented: $showHistory) {
+            HistorySnippetsView()
+                .environmentObject(vm)
         }
         .confirmationDialog(
             "Run destructive statement?",
@@ -65,6 +71,14 @@ struct TerminalView: View {
                     Label("Toggle Sidebar", systemImage: "sidebar.left")
                 }
                 .help("Show or hide the schema sidebar")
+            }
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    showHistory = true
+                } label: {
+                    Label("History & Snippets", systemImage: "clock.arrow.circlepath")
+                }
+                .help("Searchable query history and saved snippets")
             }
             ToolbarItemGroup(placement: .primaryAction) {
                 Toggle(isOn: $vm.isReadOnly) {

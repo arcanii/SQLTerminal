@@ -226,7 +226,7 @@ final class TerminalViewModel: ObservableObject {
         }
     }
 
-    private func runText(_ rawText: String, clearEditorAfterwards: Bool) {
+    private func runText(_ rawText: String, clearEditorAfterwards: Bool, recordInHistory: Bool = true) {
         // One operation at a time; ignore while a query or connect is busy.
         guard !isRunning, !isConnecting else { return }
         guard isConnected else {
@@ -246,6 +246,9 @@ final class TerminalViewModel: ObservableObject {
 
         // Echo the input; clear the editor only for a whole-editor run.
         appendHistory(.input(input))
+        if recordInHistory {
+            QueryHistoryStore.record(input)   // persistent, app-wide, searchable
+        }
         if clearEditorAfterwards {
             sqlText = ""
         }
@@ -424,13 +427,13 @@ final class TerminalViewModel: ObservableObject {
     // MARK: - Transactions
 
     /// Open a transaction. Convenience for the toolbar; equivalent to typing BEGIN.
-    func beginTransaction() { runText("BEGIN", clearEditorAfterwards: false) }
+    func beginTransaction() { runText("BEGIN", clearEditorAfterwards: false, recordInHistory: false) }
 
     /// Commit the open transaction.
-    func commitTransaction() { runText("COMMIT", clearEditorAfterwards: false) }
+    func commitTransaction() { runText("COMMIT", clearEditorAfterwards: false, recordInHistory: false) }
 
     /// Roll back the open transaction.
-    func rollbackTransaction() { runText("ROLLBACK", clearEditorAfterwards: false) }
+    func rollbackTransaction() { runText("ROLLBACK", clearEditorAfterwards: false, recordInHistory: false) }
 
     /// Update `inTransaction` from the transaction-control statements that ran.
     /// Heuristic: the last BEGIN/COMMIT/ROLLBACK in the batch wins. Good enough
