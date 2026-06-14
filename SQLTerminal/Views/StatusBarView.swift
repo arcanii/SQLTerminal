@@ -22,25 +22,38 @@ import SwiftUI
 
 struct StatusBarView: View {
     @EnvironmentObject var vm: TerminalViewModel
+    @State private var showingDetails = false
 
     var body: some View {
         HStack(spacing: 12) {
-            // Connection indicator
-            Circle()
-                .fill(vm.isConnected ? Color.green : Color.red)
-                .frame(width: 8, height: 8)
+            // Connection indicator — click (the dot, name, or lock) for details.
+            Button {
+                showingDetails.toggle()
+            } label: {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(vm.isConnected ? Color.green : Color.red)
+                        .frame(width: 8, height: 8)
 
-            Text(vm.connectionInfo?.displayName ?? "Not connected")
-                .font(.system(.caption, design: .monospaced))
-                .lineLimit(1)
+                    Text(vm.connectionInfo?.displayName ?? "Not connected")
+                        .font(.system(.caption, design: .monospaced))
+                        .lineLimit(1)
 
-            // A lock appears only when the connection is genuinely encrypted.
-            if vm.isSSLActive {
-                Image(systemName: "lock.fill")
-                    .font(.caption)
-                    .foregroundStyle(.green)
-                    .help("Connection is encrypted with SSL/TLS")
-                    .accessibilityLabel("SSL/TLS encrypted")
+                    // A lock appears only when the connection is genuinely encrypted.
+                    if vm.isSSLActive {
+                        Image(systemName: "lock.fill")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!vm.isConnected)
+            .help(connectionHelp)
+            .accessibilityLabel(vm.isSSLActive ? "SSL/TLS encrypted. Show connection details" : "Show connection details")
+            .popover(isPresented: $showingDetails, arrowEdge: .top) {
+                ConnectionDetailsView(connection: vm.connectionInfo, isSSLActive: vm.isSSLActive)
             }
 
             if vm.isRunning || vm.isConnecting {
@@ -67,6 +80,13 @@ struct StatusBarView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var connectionHelp: String {
+        guard vm.isConnected else { return "Not connected" }
+        return vm.isSSLActive
+            ? "Encrypted (SSL/TLS) — click for connection details"
+            : "Click for connection details"
     }
 }
 
